@@ -18,7 +18,7 @@ A small, falsifiable experiment: can a language model learn to use a continuous 
 - Automated numerical boundary, determinism, and input-validation tests.
 - One unchanged chat/affect pipeline with two interchangeable transports: a locally running, authenticated llama.cpp GGUF service, or the existing Transformers.js/ONNX browser worker on supported machines.
 - Browser WebGPU requires `shader-f16` for the supported Qwen3 graph. WASM/CPU is **explicit only**, because it failed session allocation (`std::bad_alloc`) on the test browser. The browser path probes three generated tokens before declaring readiness.
-- A local launcher for an existing Qwen3-1.7B GGUF file; the service binds to loopback and restricts CORS to the intended page origins.
+- A local launcher for an existing Qwen3-1.7B GGUF file; the service binds to loopback and allows one selected frontend origin per server launch.
 - A single GitHub Pages workflow that runs browser/data tests and deploys the static site; no GPUs or model weights in CI.
 
 ## Use your existing GGUF model (recommended on Linux / Vivaldi)
@@ -35,12 +35,28 @@ The script defaults to your cached `Qwen3-1.7B-Q4_K_M.gguf`. Optionally pass one
 
 The script prints the API key it generated once in `~/.config/smi-affective/llama-api-key`. It creates the key with restrictive file permissions and reuses it on subsequent launches. In the website, choose **Local GGUF server**, paste that key into the session-only field, then click **Connect local Qwen**. It queries `http://127.0.0.1:8080/v1/models` and uses the reported model ID for `/v1/chat/completions` with streamed responses. **The key is never stored in localStorage, sent to GitHub, or included in exported traces.**
 
-`llama-server` binds to `127.0.0.1` rather than all network interfaces, restricts the allowed CORS origins to the GitHub Pages site and supported local development origins, and uses a required API key. Do not remove those restrictions or enable llama.cpp agent/tool capabilities merely to make the demo work. Browsers can ask for permission to access loopback-network resources from a public HTTPS page; allow it only for this research site if you trust its source. If your browser still blocks the public page's loopback request, run the **same static UI locally**:
+`llama-server` binds to `127.0.0.1` rather than all network interfaces, allows **one** explicitly selected frontend CORS origin, and uses a required API key. The default is `https://superior-mi-labs.github.io`. Some llama.cpp builds incorrectly emit multiple configured origins as one `Access-Control-Allow-Origin` value, which browsers reject. Do not pass comma-separated origins or disable CORS to work around it. Do not remove those restrictions or enable llama.cpp agent/tool capabilities merely to make the demo work. Browsers can ask for permission to access loopback-network resources from a public HTTPS page; allow it only for this research site if you trust its source. If your browser still blocks the public page's loopback request, run the **same static UI locally**:
 
-```bash
+ ```bash
+# Stop the GGUF server (Ctrl+C), then restart with the local UI origin:
+SMI_CORS_ORIGIN=http://127.0.0.1:8000 bash scripts/run-local-qwen.sh
+# In another terminal:
 python3 -m http.server 8000 --bind 127.0.0.1 --directory web
 # Open http://127.0.0.1:8000
 ```
+
+The allowed origin must match the URL in the browser exactly. `http://localhost:8000` is also supported with `SMI_CORS_ORIGIN=http://localhost:8000`. Do not configure several origins at once. The API key is reused after a restart.
+
+To check the public-site CORS preflight without sending your key:
+
+```bash
+curl -i -X OPTIONS http://127.0.0.1:8080/v1/models \
+  -H 'Origin: https://superior-mi-labs.github.io' \
+  -H 'Access-Control-Request-Method: GET' \
+  -H 'Access-Control-Request-Headers: authorization'
+```
+
+The response should have exactly one `Access-Control-Allow-Origin: https://superior-mi-labs.github.io` header. If this passes but the browser still refuses access, inspect local-network permissions, private-network preflights, and browser mixed-content policy rather than changing the model.
 
 This is the same UI and state logic, not a second runtime. Check the browser console for CORS, Local Network Access, or mixed-content errors. A failure to connect is not evidence that your local Qwen model cannot generate; verify the server independently before changing model files.
 
