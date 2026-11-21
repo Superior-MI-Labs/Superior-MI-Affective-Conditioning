@@ -68,6 +68,7 @@ function setBusy(value) {
   for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'model-backend', 'ai-d', 'msg-d']) $(id).disabled = value;
   $('message').disabled = value;
   $('gpu-check').disabled = value;
+  $('cancel-qwen').hidden = !value || state.engine !== 'qwen';
   for (const prefix of ['ai', 'msg']) $(prefix + '-plot').setAttribute('aria-disabled', String(value));
 }
 
@@ -153,6 +154,7 @@ function appendBubble(role, content, label) {
   node.append(caption, text);
   list.append(node);
   list.scrollTop = list.scrollHeight;
+  return text;
 }
 
 function downloadJSON(name, data) {
@@ -195,6 +197,11 @@ for (const engine of ['simulation', 'qwen']) {
 }
 $('browser-choice').addEventListener('change', renderBrowserGuide);
 $('gpu-check').addEventListener('click', checkWebGPU);
+$('cancel-qwen').addEventListener('click', () => {
+  if (!state.busy || state.engine !== 'qwen' || !qwen) return;
+  qwen.dispose();
+  qwen = undefined;
+});
 $('load-qwen').addEventListener('click', async () => {
   if (state.busy) return;
   setBusy(true);
@@ -243,17 +250,41 @@ $('chat-form').addEventListener('submit', async (event) => {
   const effective = evolve ? result.ai : before.ai;
   const effectivePhase = evolve ? result.phase : before.phase;
   setBusy(true);
+  let outputNode;
+  let visibleText = '';
+  let tokenCount = 0;
+  let began = 0;
+  let statusTimer;
   try {
     let response;
     if (state.engine === 'qwen') {
-      setModelStatus('Qwen is generating locally in your browser…');
+      began = performance.now();
+      appendBubble('user', message, `MESSAGE · ${mode}`);
+      outputNode = appendBubble('sim', 'Preparing prompt…', 'QWEN3-0.6B · GENERATING');
+      setModelStatus('Qwen preparing prompt; the first token may take time on WebGPU…');
+      statusTimer = setInterval(() => {
+        const seconds = Math.floor((performance.now() - began) / 1000);
+        setModelStatus(tokenCount
+          ? `Generating: ${tokenCount} tokens · ${seconds}s elapsed`
+          : `Waiting for first token · ${seconds}s elapsed${seconds >= 30 ? ' · slow GPU or unsupported kernel? Use Stop generation if needed.' : ''}`);
+      }, 1000);
       const messages = buildQwenMessages({
         message, mode, before: before.ai, observed, after: effective,
         phase: effectivePhase, alignment: result.alignment,
         history: state.turns.filter((turn) => turn.engine === 'qwen'),
       });
-      response = await qwen.generate(messages);
-      setModelStatus(`Qwen3-0.6B ready (${qwen.plan.device}, ${qwen.plan.dtype}).`);
+      response = await qwen.generate(messages, ({delta, tokens}) => {
+        if (typeof tokens === 'number') tokenCount = tokens;
+        if (delta) {
+          visibleText += delta;
+          outputNode.textContent = visibleText;
+          $('conversation').scrollTop = $('conversation').scrollHeight;
+        }
+        const elapsed = ((performance.now() - began) / 1000).toFixed(0);
+        setModelStatus(`Generating: ${tokenCount} tokens · ${elapsed}s elapsed`);
+      });
+      outputNode.textContent = response;
+      setModelStatus(`Qwen3-0.6B ready (${qwen.plan.device}, ${qwen.plan.dtype}); ${tokenCount} generated tokens.`);
     } else {
       response = templateResponse(message, effective);
     }
@@ -274,18 +305,28 @@ $('chat-form').addEventListener('submit', async (event) => {
     state.turns.push(turn);
     state.recent = result;
     if (evolve) state.current = {ai: result.ai, phase: result.phase};
-    appendBubble('user', message, `MESSAGE · ${mode}`);
-    appendBubble('sim', response, state.engine === 'qwen'
-      ? 'QWEN3-0.6B · REAL MODEL / TEXT PROMPT CONDITIONING'
-      : 'DETERMINISTIC TEMPLATE · NOT MODEL OUTPUT');
+    if (!outputNode) {
+      appendBubble('user', message, `MESSAGE · ${mode}`);
+      appendBubble('sim', response, 'DETERMINISTIC TEMPLATE · NOT MODEL OUTPUT');
+    } else {
+      outputNode.parentElement.querySelector('small').textContent =
+        'QWEN3-0.6B · REAL MODEL / TEXT PROMPT CONDITIONING';
+    }
     $('message').value = '';
     $('target-response').value = '';
     $('export-hint').textContent = 'Enter a human-approved target response to export a training example.';
   } catch (error) {
     // Generation failure must not advance internal state or commit a training example.
-    setModelStatus(`Generation failed: ${error.message}`);
-    $('browser-help').open = true;
+    if (outputNode) {
+      outputNode.textContent = visibleText
+        ? `${visibleText}\n\n[Incomplete response: ${error.message}]`
+        : `[No response: ${error.message}]`;
+      outputNode.parentElement.querySelector('small').textContent = 'QWEN · INCOMPLETE / NOT SAVED';
+    }
+    setModelStatus(`Generation ${/canceled/i.test(error.message) ? 'canceled' : 'failed'}: ${error.message}`);
+    if (!/canceled/i.test(error.message)) $('browser-help').open = true;
   } finally {
+    if (statusTimer) clearInterval(statusTimer);
     setBusy(false);
     render();
   }

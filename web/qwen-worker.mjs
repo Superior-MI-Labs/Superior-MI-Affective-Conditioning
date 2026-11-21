@@ -7,6 +7,7 @@ const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers
 let generator;
 let loadedPreference;
 let loading;
+let transformers;
 
 function status(message) { self.postMessage({type: 'status', message}); }
 function reply(id, value) { self.postMessage({type: 'result', id, value}); }
@@ -24,7 +25,8 @@ async function loadModel(preference = 'webgpu') {
       loadedPreference = undefined;
     }
     status(`Loading Qwen3-0.6B (${plan.device}, ${plan.dtype}). First use downloads model weights.`);
-    const {pipeline} = await import(TRANSFORMERS_CDN);
+    transformers ??= await import(TRANSFORMERS_CDN);
+    const {pipeline} = transformers;
     const created = await pipeline('text-generation', MODEL, {
       device: plan.device,
       dtype: plan.dtype,
@@ -51,11 +53,37 @@ self.onmessage = async ({data}) => {
       reply(id, await loadModel(data.preference));
     } else if (type === 'generate') {
       if (!generator) throw new Error('Qwen must be loaded first.');
-      const output = await generator(data.messages, {max_new_tokens: 180, do_sample: false});
+      // Emit partial text and token counts. Some WebGPU devices need a long prefill
+      // before the first token, and without streaming that looks like a hung chat.
+      let streamed = '';
+      let tokens = 0;
+      const {TextStreamer} = transformers;
+      const streamer = new TextStreamer(generator.tokenizer, {
+        skip_prompt: true,
+        skip_special_tokens: true,
+        callback_function: (delta) => {
+          if (!delta) return;
+          streamed += delta;
+          self.postMessage({type: 'progress', id, delta, tokens});
+        },
+        token_callback_function: () => {
+          tokens++;
+          self.postMessage({type: 'progress', id, tokens});
+        },
+      });
+      status('Qwen preparing prompt and starting generation…');
+      const output = await generator(data.messages, {
+        max_new_tokens: 96,
+        do_sample: false,
+        tokenizer_encode_kwargs: {enable_thinking: false},
+        streamer,
+      });
       const conversation = output?.[0]?.generated_text;
       const last = Array.isArray(conversation) ? conversation.at(-1)?.content : conversation;
-      const answer = typeof last === 'string' ? last : '';
-      if (!answer.trim()) throw new Error('The model produced no response text.');
+      // The pipeline result is authoritative. A streamed fallback is useful if
+      // one version of Transformers.js returns a different output shape.
+      const answer = typeof last === 'string' && last.trim() ? last : streamed;
+      if (!answer.trim()) throw new Error(`Qwen generated ${tokens} tokens but returned no visible text. Try a short prompt or the CPU backend.`);
       reply(id, answer);
     } else {
       throw new Error('Unknown model-worker operation.');

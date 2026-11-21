@@ -70,3 +70,52 @@ test('inference backend changes require an explicit reload and preserve returned
   assert.equal(client.preference,'cpu');
   assert.equal(requests.filter(x=>x.type==='load').length,2);
 });
+
+test('streaming progress is delivered to the active generation without resolving it early', async () => {
+  const handlers = new Map();
+  const fake = {
+    addEventListener(type, handler) {handlers.set(type, handler);},
+    postMessage({id, type}) {
+      if (type === 'load') {
+        queueMicrotask(() => handlers.get('message')({data:{id, type:'result', value:{device:'webgpu', dtype:'q4'}}}));
+      } else if (type === 'generate') {
+        queueMicrotask(() => {
+          for (const data of [
+            {id, type:'progress', tokens:1},
+            {id, type:'progress', delta:'Hello ', tokens:1},
+            {id, type:'progress', delta:'world', tokens:2},
+            {id, type:'result', value:'Hello world'},
+          ]) handlers.get('message')({data});
+        });
+      }
+    },
+  };
+  const client = new BrowserQwen({workerFactory: () => fake});
+  await client.load();
+  const updates = [];
+  const result = await client.generate([{role:'user',content:'Hi'}], (update) => updates.push(update));
+  assert.equal(result, 'Hello world');
+  assert.deepEqual(updates.map(x => x.delta).filter(Boolean), ['Hello ', 'world']);
+  assert.equal(updates.at(-1).tokens, 2);
+  assert.equal(client.pending.size, 0);
+});
+
+test('canceling generation terminates the worker and rejects outstanding requests', async () => {
+  const handlers = new Map();
+  let terminated = false;
+  const fake = {
+    addEventListener(type, handler) {handlers.set(type, handler);},
+    postMessage({id, type}) {
+      if (type === 'load') queueMicrotask(() => handlers.get('message')({data:{id, type:'result',value:{device:'webgpu',dtype:'q4'}}}));
+    },
+    terminate() {terminated = true;},
+  };
+  const client = new BrowserQwen({workerFactory: () => fake});
+  await client.load();
+  const inflight = client.generate([{role:'user',content:'Hi'}]);
+  client.dispose();
+  await assert.rejects(inflight, /Generation canceled/);
+  assert.equal(terminated,true);
+  assert.equal(client.ready,false);
+  assert.equal(client.pending.size,0);
+});

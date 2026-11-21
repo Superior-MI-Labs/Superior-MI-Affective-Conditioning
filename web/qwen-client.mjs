@@ -20,6 +20,10 @@ export class BrowserQwen {
     }
     const pending = this.pending.get(data?.id);
     if (!pending) return;
+    if (data.type === 'progress') {
+      pending.onProgress?.(data);
+      return;
+    }
     this.pending.delete(data.id);
     if (data.type === 'result') pending.resolve(data.value);
     else if (data.type === 'error') pending.reject(new Error(String(data.message || 'Unknown model error')));
@@ -35,10 +39,10 @@ export class BrowserQwen {
     this.onStatus(message);
   }
 
-  request(type, payload = {}) {
+  request(type, payload = {}, onProgress) {
     return new Promise((resolve, reject) => {
       const id = ++this.sequence;
-      this.pending.set(id, {resolve, reject});
+      this.pending.set(id, {resolve, reject, onProgress});
       this.worker.postMessage({id, type, ...payload});
     });
   }
@@ -63,10 +67,15 @@ export class BrowserQwen {
     return this.loading;
   }
 
-  async generate(messages) {
+  async generate(messages, onProgress) {
     if (!this.ready) throw new Error('Load Qwen before generating.');
-    const answer = await this.request('generate', {messages});
+    const answer = await this.request('generate', {messages}, onProgress);
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('Qwen returned an empty response.');
     return answer.trim();
+  }
+
+  dispose() {
+    this.failAll('Generation canceled; load Qwen again to retry.');
+    this.worker.terminate?.();
   }
 }

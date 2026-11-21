@@ -95,7 +95,7 @@
       <div class="section-heading"><div><span class="section-number">05 / INTERACTION</span><h2>Conversation experiment</h2></div><span class="hint">Choose simulation or real Qwen above</span></div>
       <section class="chat-panel panel">
         <div id="conversation" class="conversation" role="log" aria-live="polite"><div class="empty">Enter a message and submit a turn to observe the selected dynamics model. Repeating the same message can produce different state trajectories.</div></div>
-        <form id="chat-form"><label for="message" class="sr-only">Message</label><textarea id="message" rows="2" placeholder="Type a message to test the affective interaction…" required maxlength="500"></textarea><button type="submit" id="submit-turn" class="primary">Run interaction <span aria-hidden="true">→</span></button></form>
+        <form id="chat-form"><label for="message" class="sr-only">Message</label><textarea id="message" rows="2" placeholder="Type a message to test the affective interaction…" required maxlength="500"></textarea><button type="submit" id="submit-turn" class="primary">Run interaction <span aria-hidden="true">→</span></button><button type="button" id="cancel-qwen" class="secondary" hidden>Stop generation</button></form>
       </section>
 
       <section class="panel dataset-panel">

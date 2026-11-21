@@ -17,3 +17,7 @@
 .browser-guide ol{margin:0;padding-left:23px;font-size:12px;color:#c1d5dd;line-height:1.75}
 .browser-guide li+li{margin-top:5px}
 @media(max-width:760px){.browser-support-row{align-items:flex-start;flex-direction:column}.inference-choice{flex-wrap:wrap}}
+
+/* Keep native hidden controls hidden even where shared button styles override display. */
+#cancel-qwen[hidden]{display:none}
+.conversation .bubble div{white-space:pre-wrap;overflow-wrap:anywhere}
