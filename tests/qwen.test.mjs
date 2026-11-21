@@ -62,9 +62,9 @@ test('inference backend changes require an explicit reload and preserve returned
   };
   const client = new BrowserQwen({workerFactory:()=>fake});
   assert.equal((await client.diagnose()).shaderF16,true);
-  await client.load('webgpu');
+  await client.load('auto');
   assert.equal(client.plan.dtype,'q4f16');
-  await client.load('webgpu');
+  await client.load('auto');
   assert.equal(requests.filter(x=>x.type==='load').length,1);
   await client.load('cpu');
   assert.equal(client.plan.device,'wasm');
@@ -134,6 +134,16 @@ test('model is not verified until real token computation finishes', async () => 
   };
   await probeGeneration(generator);
   assert.equal(events.length, 1);
-  assert.equal(events[0].options.max_new_tokens, 1);
+  assert.equal(events[0].options.max_new_tokens, 3);
+  assert.equal(events[0].options.min_new_tokens, 3);
   await assert.rejects(probeGeneration(async () => {throw Error('Gather requires f16');}), /Gather requires f16/);
+});
+
+test('readiness probe reaches token decoding rather than only prompt prefill', async () => {
+  await assert.rejects(
+    probeGeneration(async (_messages, options) => {
+      if (options.max_new_tokens > 1) throw new Error('decode kernel failed');
+    }),
+    /decode kernel failed/,
+  );
 });

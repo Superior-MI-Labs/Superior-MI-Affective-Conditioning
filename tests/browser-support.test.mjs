@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {browserFamily, browserGuidance, inspectWebGPU, inferencePlan, modelFailureMessage} from '../web/browser-support.mjs';
 
 test('browser classification and manual Vivaldi override are honest', () => {
@@ -24,24 +25,34 @@ test('WebGPU probe distinguishes missing API, missing adapter, unsupported and s
   assert.equal((await inspectWebGPU({requestAdapter:async()=>{throw Error('blocked')}})).status,'probe-failed');
 });
 
-test('the model never selects an f16 dtype when the adapter does not expose shader-f16', () => {
-  const noF16 = inferencePlan({status:'ready',shaderF16:false});
-  assert.equal(noF16.device,'webgpu');
-  assert.equal(noF16.dtype,'q4');
-  assert.equal(noF16.model, 'onnx-community/Qwen2.5-0.5B-Instruct');
-  const f16 = inferencePlan({status:'ready',shaderF16:true});
+test('automatic mode never dispatches WebGPU when shader-f16 is unavailable', () => {
+  for (const capability of [
+    {status:'ready', shaderF16:false}, {status:'adapter-unavailable', shaderF16:false},
+    {status:'api-unavailable', shaderF16:false}, {status:'probe-failed', shaderF16:false},
+  ]) {
+    const plan = inferencePlan(capability);
+    assert.equal(plan.device, 'wasm');
+    assert.equal(plan.dtype, 'q4');
+    assert.equal(plan.model, 'onnx-community/Qwen2.5-0.5B-Instruct');
+  }
+  const f16 = inferencePlan({status:'ready', shaderF16:true});
+  assert.equal(f16.device,'webgpu');
   assert.equal(f16.dtype, 'q4f16');
   assert.equal(f16.model, 'onnx-community/Qwen3-0.6B-ONNX');
-  const cpu = inferencePlan({status:'api-unavailable'},'cpu');
-  assert.equal(cpu.device,'wasm');
-  assert.equal(cpu.model, noF16.model);
-  assert.throws(()=>inferencePlan({status:'adapter-unavailable'}),/CPU/);
-  assert.throws(()=>inferencePlan({status:'ready'},'unknown'),TypeError);
+  assert.equal(inferencePlan({status:'ready',shaderF16:true},'cpu').device, 'wasm');
+  assert.throws(()=>inferencePlan({status:'ready'},'webgpu'),TypeError);
 });
 
 test('runtime f16 errors and memory failures produce actionable messages', () => {
   const error=modelFailureMessage(new Error('GenerateSourceCode Program Gather requires f16 but the device does not support it'));
-  assert.match(error,/CPU \/ WebAssembly \(slow\)/);
+  assert.match(error,/CPU \/ WebAssembly mode/);
   assert.match(error,/Details: GenerateSourceCode/);
   assert.match(modelFailureMessage('GPU out of memory'),/Insufficient/);
+});
+
+test('browser runtime selector matches the supported backend contract', () => {
+  const page = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.match(page, /<option value="auto">/);
+  assert.match(page, /<option value="cpu">/);
+  assert.doesNotMatch(page, /<option value="webgpu">/);
 });

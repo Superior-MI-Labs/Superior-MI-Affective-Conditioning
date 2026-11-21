@@ -13,7 +13,7 @@ function status(message) { self.postMessage({type: 'status', message}); }
 function reply(id, value) { self.postMessage({type: 'result', id, value}); }
 function failure(id, error) { self.postMessage({type: 'error', id, message: modelFailureMessage(error)}); }
 
-async function loadModel(preference = 'webgpu') {
+async function loadModel(preference = 'auto') {
   if (generator && loadedPreference === preference) return activePlan;
   if (loading) return loading;
   loading = (async () => {
@@ -25,7 +25,7 @@ async function loadModel(preference = 'webgpu') {
       loadedPreference = undefined;
       activePlan = undefined;
     }
-    status(`Loading ${plan.label} (${plan.device}, ${plan.dtype}). First use downloads model weights.`);
+    status(`Loading ${plan.label} (${plan.device}, ${plan.dtype}). ${plan.reason}. First use downloads model weights.`);
     transformers ??= await import(TRANSFORMERS_CDN);
     const {pipeline} = transformers;
     const created = await pipeline('text-generation', plan.model, {
@@ -38,7 +38,7 @@ async function loadModel(preference = 'webgpu') {
       },
     });
     try {
-      status(`Testing ${plan.label} execution (one token)…`);
+      status(`Testing ${plan.label} prefill and decode execution (three tokens)…`);
       await probeGeneration(created);
     } catch (error) {
       await created.dispose?.();
@@ -47,7 +47,7 @@ async function loadModel(preference = 'webgpu') {
     generator = created;
     loadedPreference = preference;
     activePlan = plan;
-    status(`${plan.label} verified (${plan.device}, ${plan.dtype}). Generation runs locally in this browser.`);
+    status(`${plan.label} verified (${plan.device}, ${plan.dtype}). ${plan.reason}. Generation runs locally in this browser.`);
     return plan;
   })().finally(() => {loading = null;});
   return loading;
@@ -82,7 +82,7 @@ self.onmessage = async ({data}) => {
       });
       status('Qwen preparing prompt and starting generation…');
       const output = await generator(data.messages, {
-        max_new_tokens: 96,
+        max_new_tokens: activePlan.device === 'wasm' ? 48 : 96,
         do_sample: false,
         ...(activePlan.model.includes('Qwen3-') ? {tokenizer_encode_kwargs: {enable_thinking: false}} : {}),
         streamer,

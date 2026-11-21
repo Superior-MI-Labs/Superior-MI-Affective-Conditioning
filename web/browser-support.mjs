@@ -62,32 +62,31 @@ export async function inspectWebGPU(gpu) {
   }
 }
 
-// These are separate model artifacts, not separate inference engines. A q4 weight
-// label alone does NOT guarantee an entirely fp32 ONNX graph (see issue R4).
-export function inferencePlan(capability, preference = 'webgpu') {
-  if (preference === 'cpu') return {
-    device: 'wasm', dtype: 'q4', model: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    label: 'Qwen2.5-0.5B-Instruct', reason: 'Explicit CPU / WebAssembly fallback',
-  };
-  if (preference !== 'webgpu') throw new TypeError('Invalid inference backend.');
-  if (capability?.status !== 'ready') {
-    throw new Error('WebGPU adapter unavailable. Check browser/driver setup or select CPU (slow) before loading Qwen.');
+// The *graph*, not just the quantized weight file, determines shader requirements.
+// WebGPU LLM execution on this family requires shader-f16 in practice; the
+// no-f16 strategy is to switch execution providers, not only dtype.
+// CPU execution still requires device-specific verification.
+export function inferencePlan(capability, preference = 'auto') {
+  if (!['auto', 'cpu'].includes(preference)) throw new TypeError('Invalid inference backend.');
+  if (preference === 'auto' && capability?.status === 'ready' && capability.shaderF16 === true) {
+    return {
+      device: 'webgpu', dtype: 'q4f16', model: 'onnx-community/Qwen3-0.6B-ONNX',
+      label: 'Qwen3-0.6B', reason: 'WebGPU adapter reports shader-f16',
+    };
   }
-  if (capability.shaderF16) return {
-    device: 'webgpu', dtype: 'q4f16', model: 'onnx-community/Qwen3-0.6B-ONNX',
-    label: 'Qwen3-0.6B', reason: 'shader-f16 available',
-  };
   return {
-    device: 'webgpu', dtype: 'q4', model: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    device: 'wasm', dtype: 'q4', model: 'onnx-community/Qwen2.5-0.5B-Instruct',
     label: 'Qwen2.5-0.5B-Instruct',
-    reason: 'No shader-f16: use a different Qwen ONNX graph with documented WebGPU q4 support',
+    reason: preference === 'cpu'
+      ? 'CPU / WebAssembly explicitly selected'
+      : 'No shader-f16-capable WebGPU adapter: using CPU / WebAssembly (slower)',
   };
 }
 
 export function modelFailureMessage(error) {
   const raw = String(error?.message || error);
   if (/requires f16|shader-f16|does not support fp16|device does not support f16/i.test(raw)) {
-    return 'This model graph still requires shader-f16 even if its weights are marked q4. It cannot run on this WebGPU adapter. Select CPU / WebAssembly (slow), or use a supported browser/GPU. Details: ' + raw;
+    return 'A WebGPU kernel requires shader-f16, which the selected adapter cannot execute. Use CPU / WebAssembly mode or a supported GPU/driver. Quantizing the weights does not remove all FP16 operations. Details: ' + raw;
   }
   if (/out of memory|allocation failed|memory limit|OOM/i.test(raw)) {
     return 'Insufficient GPU/browser memory for this model. Close GPU-heavy tabs or try CPU mode (requires substantial RAM). Details: ' + raw;

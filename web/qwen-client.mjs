@@ -49,7 +49,7 @@ export class BrowserQwen {
 
   diagnose() { return this.request('diagnose'); }
 
-  async load(preference = 'webgpu') {
+  async load(preference = 'auto') {
     if (this.ready && this.preference === preference) return this.plan;
     if (this.loading) return this.loading;
     this.loading = this.request('load', {preference}).then((plan) => {

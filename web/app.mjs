@@ -47,16 +47,16 @@ async function checkWebGPU() {
     if (capability.status === 'ready') {
       $('gpu-health').textContent = `WebGPU adapter available · shader-f16 ${capability.shaderF16 ? 'supported' : 'unavailable'}`;
       $('gpu-recommendation').textContent = capability.shaderF16
-        ? 'WebGPU will use Qwen3-0.6B q4f16. Execution is checked before the model is marked ready.'
-        : 'Your adapter lacks shader-f16. The older Qwen3 q4 graph failed here; WebGPU will use Qwen2.5-0.5B-Instruct q4 instead, with an execution check. CPU mode is available if needed.';
+        ? 'Automatic mode selects Qwen3-0.6B q4f16 on WebGPU. A three-token probe checks both prefill and decode.'
+        : 'Your GPU does not expose shader-f16. Automatic mode selects Qwen2.5-0.5B-Instruct q4 on CPU / WebAssembly instead of retrying incompatible WebGPU shaders. Expect slower generation.';
     } else {
       $('gpu-health').textContent = `WebGPU unavailable (${capability.status})`;
-      $('gpu-recommendation').textContent = 'Use the browser setup guide below, or choose CPU / WebAssembly explicitly. CPU inference can be very slow and needs substantial RAM.';
+      $('gpu-recommendation').textContent = 'Automatic mode uses CPU / WebAssembly for this browser. It can be very slow and requires sufficient system RAM; the simulator remains available.';
       $('browser-help').open = true;
     }
   } catch (error) {
     $('gpu-health').textContent = 'Could not inspect WebGPU';
-    $('gpu-recommendation').textContent = `Check failed: ${error.message}. Use the browser guide or CPU mode.`;
+    $('gpu-recommendation').textContent = `GPU check failed: ${error.message}. Automatic mode will attempt CPU / WebAssembly.`;
     $('browser-help').open = true;
   } finally {
     $('gpu-check').disabled = state.busy;
@@ -208,7 +208,7 @@ $('load-qwen').addEventListener('click', async () => {
   try {
     const plan = await ensureQwen().load($('model-backend').value);
     state.engine = 'qwen';
-    setModelStatus(`${plan.label} verified (${plan.device}, ${plan.dtype}).`);
+    setModelStatus(`${plan.label} verified (${plan.device}, ${plan.dtype}). ${plan.reason}.`);
   } catch (error) {
     setModelStatus(`Qwen load failed: ${error.message}`);
     $('browser-help').open = true;
@@ -261,12 +261,12 @@ $('chat-form').addEventListener('submit', async (event) => {
       began = performance.now();
       appendBubble('user', message, `MESSAGE · ${mode}`);
       outputNode = appendBubble('sim', 'Preparing prompt…', `${qwen.plan.label.toUpperCase()} · GENERATING`);
-      setModelStatus('Qwen preparing prompt; the first token may take time on WebGPU…');
+      setModelStatus(`Qwen preparing prompt (${qwen.plan.device}); first token may take time…`);
       statusTimer = setInterval(() => {
         const seconds = Math.floor((performance.now() - began) / 1000);
         setModelStatus(tokenCount
           ? `Generating: ${tokenCount} tokens · ${seconds}s elapsed`
-          : `Waiting for first token · ${seconds}s elapsed${seconds >= 30 ? ' · slow GPU or unsupported kernel? Use Stop generation if needed.' : ''}`);
+          : `Waiting for first token · ${seconds}s elapsed${seconds >= 30 ? ' · slow inference? Use Stop generation if needed.' : ''}`);
       }, 1000);
       const messages = buildQwenMessages({
         message, mode, before: before.ai, observed, after: effective,
