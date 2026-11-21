@@ -6,7 +6,7 @@
 
 A small, falsifiable experiment: can a language model learn to use a continuous affective state to vary its responses in useful ways? R0 includes two explicitly separate state-transition modes, **vector alignment** and **oscillatory phase**.
 
-**Current evidence boundary:** The browser demo is **not an AI model**. It runs deterministic equations and deliberately simple response templates. The Python experiment contains a real trainable soft-prefix projector and LoRA path for compatible Hugging Face-format Qwen instruct models, but **no trained checkpoint or empirical empathy result is published here yet**.
+**Current evidence boundary:** The browser now offers two explicitly labeled engines: a deterministic mathematical simulation, and real unmodified Qwen3-0.6B language generation **conditioned through ordinary text prompts**. Prompt conditioning is not the trainable affective soft-prefix/LoRA experiment. The Python research path contains that experimental training design, but **no trained affective checkpoint or empirical empathy result is published yet**.
 
 ## What exists
 
@@ -16,11 +16,14 @@ A small, falsifiable experiment: can a language model learn to use a continuous 
 - Inspectable transitions, transcript/trace export, and **human-authored** target-response export for training.
 - A minimal Python feature contract, trainable continuous soft-prefix mapper, LoRA training path, and one-shot local inference path.
 - Automated numerical boundary, determinism, and input-validation tests.
+- Optional browser-local Qwen3-0.6B WebGPU generation through Transformers.js and ONNX; model weights are downloaded by the visitor, not hosted on GitHub Pages.
 - A single GitHub Pages workflow that runs browser/data tests and deploys the static site; no GPUs or model weights in CI.
 
 ## Try the public demonstration
 
-Open [the GitHub Pages site](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/). Click the two plots, select a mode, enter a message, and run an interaction. The supplied reply is a **template** illustrating how state can affect response style. It is **not** an LLM answer. The page can run entirely as static files, has no API key, and sends no entered messages to a backend.
+Open [the GitHub Pages site](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/). Click the two plots, select a mode, and enter a message. The default **Simulation** engine gives a deterministic example template. Switch to **Browser Qwen3-0.6B**, click **Load Qwen in browser**, and use the same controls to generate an answer from a real pretrained Qwen model. The site remains static and requires no API key or remote text-generation server. Your browser fetches model/JS binaries from Hugging Face and a CDN; inference itself runs locally. The browser needs WebGPU support, storage, and adequate RAM/VRAM. Loading may fail on unsupported devices; simulation remains available.
+
+**This is an intentionally limited demonstration.** The selected VAD values and calculated phase/alignment are serialized into a system message for Qwen. This verifies the end-to-end UI-to-real-text-generation path and allows qualitative comparison, but does **not** inject continuous soft-prefix embeddings, load a trained affective LoRA, or demonstrate that a model has learned emotional dynamics. Browser checkpoint: [`onnx-community/Qwen3-0.6B-ONNX`](https://huggingface.co/onnx-community/Qwen3-0.6B-ONNX). The three GGUF paths on a researcher's Linux machine are not accessible from a public GitHub Page and cannot be used directly by this WebGPU ONNX adapter.
 
 On a local checkout, serve the `web` directory rather than opening `index.html` as a file (JavaScript modules require HTTP in most browsers):
 
@@ -90,7 +93,7 @@ flowchart LR
 - **Feature contract:** nine floats (3 updated VAD + 3 observed VAD + mode bit + 2 phase features). Mode changes the transition and the representation, not the transformer topology.
 - **Training:** assistant-target next-token cross-entropy; projector and LoRA trainable; original model weights frozen.
 - **Inference:** ordinary transformer forward passes, with a small prefix-embedding adapter. The Python CLI demonstrates this without a new inference runtime.
-- **Hosting:** GitHub Pages cannot run PyTorch/Qwen inference itself. A future hosted GPU/CPU service or compatible endpoint will be needed for model-generated chat on the public page. Do not paste private API tokens into a public page.
+- **Hosting:** GitHub Pages cannot execute Python/Qwen inference servers, but its static frontend can run the small ONNX Qwen model on visitors' WebGPU devices. Serving our future LoRA/soft-prefix Qwen model will require a compatible browser export or a separately hosted model runtime. Do not paste private API tokens into a public page.
 
 The R0 transition is a hand-defined experimental hypothesis, not an established theory of psychological emotion or evidence that a model has subjective feelings. Its parameters, and any later learned dynamics, must be evaluated against baselines and held-out scenarios. See [research design](docs/RESEARCH.md).
 
@@ -108,7 +111,7 @@ The Pages deployment runs both of these tests in the same deployment workflow to
 1. **R0:** Public static demo, versioned examples, mode contract, trainable local adapter, defensive tests.
 2. **R1:** Collect diverse, reviewed state-conditioned conversations; implement held-out evaluations and a matched textual-conditioning baseline.
 3. **R2:** Train/evaluate against a real 0.5B chat model, compare vector/phase trajectories with a parameter-matched recurrent baseline; document negative results.
-4. **R3:** Only after measured evidence: connect real inference to a hosted demo and test additional appraisal variables or learned dynamics.
+4. **R3:** Evaluate the trained adapter with real Qwen generation, then export it for browser execution or serve it from a proper inference backend. A hosted service is optional for today's unmodified browser Qwen.
 
 ## Research sources and licensing
 

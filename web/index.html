@@ -20,7 +20,17 @@
       <div class="eyebrow"><span class="live-indicator"></span> PROTOTYPE R0 / INTERACTIVE RESEARCH</div>
       <h1>Affective <em>Conditioning</em></h1>
       <p class="lead">Explore how a simulated AI state interacts with an observed message state. Change both vectors directly, switch the dynamics model, and inspect every state transition.</p>
-      <div class="notice"><strong>Simulation, not a trained AI.</strong> This GitHub Pages demonstration uses explicit mathematical dynamics and example response templates. It does not perform Qwen inference or predict anyone’s emotions.</div>
+      <div class="notice"><strong>Two separate experiments.</strong> Simulation uses deterministic example responses. Browser Qwen produces real language-model responses using text-prompts containing the selected affect values. <strong>No affect-conditioned LoRA is trained or running here yet.</strong> The application does not predict anyone’s emotions.</div>
+
+      <section class="panel model-panel" aria-labelledby="model-heading">
+        <div><span class="section-number">00 / INFERENCE</span><h3 id="model-heading">Response engine</h3></div>
+        <div class="segmented" role="group" aria-label="Response engine">
+          <button type="button" id="engine-simulation" class="selected" aria-pressed="true">Deterministic simulation</button>
+          <button type="button" id="engine-qwen" aria-pressed="false">Browser Qwen3-0.6B</button>
+        </div>
+        <div class="actions"><button type="button" class="secondary" id="load-qwen">Load Qwen in browser</button><span id="model-status" role="status" aria-live="polite" class="hint">WebGPU required. Model downloads from Hugging Face on first use.</span></div>
+        <p class="hint" id="model-hint">Deterministic example replies; no neural model runs in this mode.</p>
+      </section>
 
       <div class="mode-row">
         <div><span class="section-number">01 / EXPERIMENT</span><h2>Interaction mechanism</h2></div>
@@ -52,17 +62,17 @@
         <div class="actions"><button id="reset" type="button" class="secondary">Reset experiment</button><button id="export-trace" type="button" class="secondary">Export trace (.json)</button></div>
       </section>
 
-      <div class="section-heading"><div><span class="section-number">05 / INTERACTION</span><h2>Conversation experiment</h2></div><span class="hint">Deterministic example replies</span></div>
+      <div class="section-heading"><div><span class="section-number">05 / INTERACTION</span><h2>Conversation experiment</h2></div><span class="hint">Choose simulation or real Qwen above</span></div>
       <section class="chat-panel panel">
         <div id="conversation" class="conversation" role="log" aria-live="polite"><div class="empty">Enter a message and submit a turn to observe the selected dynamics model. Repeating the same message can produce different state trajectories.</div></div>
-        <form id="chat-form"><label for="message" class="sr-only">Message</label><textarea id="message" rows="2" placeholder="Type a message to test the affective interaction…" required maxlength="500"></textarea><button type="submit" class="primary">Run interaction <span aria-hidden="true">→</span></button></form>
+        <form id="chat-form"><label for="message" class="sr-only">Message</label><textarea id="message" rows="2" placeholder="Type a message to test the affective interaction…" required maxlength="500"></textarea><button type="submit" id="submit-turn" class="primary">Run interaction <span aria-hidden="true">→</span></button></form>
       </section>
 
       <section class="panel dataset-panel">
         <div><span class="section-number">06 / DATASET</span><h3>Approved training example</h3><p>To collect a supervised training example, write the response you actually want the model to learn. The demonstration's automatic template is <strong>not</strong> training ground truth.</p></div>
         <label for="target-response">Human-authored target assistant response</label><textarea id="target-response" rows="3" placeholder="Write or edit the ideal assistant response here…" maxlength="1000"></textarea><div class="actions"><button type="button" id="export-example" class="secondary">Export approved example (.json)</button><span class="hint" id="export-hint" role="status">Run an interaction before exporting an example.</span></div>
       </section>
-      <footer>SUPERIOR MI LABS · AFFECTIVE CONDITIONING R0 <span>Valence / Arousal / Dominance · No model inference on this page</span></footer>
+      <footer>SUPERIOR MI LABS · AFFECTIVE CONDITIONING R0 <span>Valence / Arousal / Dominance · Optional browser-local Qwen</span></footer>
     </main>
   </div>
 </body>

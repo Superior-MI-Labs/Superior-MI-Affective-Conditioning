@@ -1,4 +1,6 @@
 import {DEFAULTS, clamp, initialState, stepAffect, affectName, templateResponse} from './affect.mjs';
+import {buildQwenMessages} from './qwen-prompt.mjs';
+import {BrowserQwen} from './qwen-client.mjs';
 
 const $ = (id) => document.getElementById(id);
 const copy = (a) => [...a];
@@ -11,7 +13,19 @@ const state = {
   evolve: true,
   turns: [],
   recent: null,
+  engine: 'simulation',
+  busy: false,
 };
+
+let qwen;
+function setModelStatus(message) { $('model-status').textContent = message; }
+function setBusy(value) {
+  state.busy = value;
+  for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'ai-d', 'msg-d']) $(id).disabled = value;
+  $('message').disabled = value;
+  for (const prefix of ['ai', 'msg']) $(prefix + '-plot').setAttribute('aria-disabled', String(value));
+}
+
 
 function render() {
   for (const [prefix, value] of [['ai', state.current.ai], ['msg', state.observed]]) {
@@ -33,9 +47,18 @@ function render() {
     $('mode-' + mode).setAttribute('aria-pressed', String(selected));
   }
   $('evolve').checked = state.evolve;
+  for (const engine of ['simulation', 'qwen']) {
+    const selected = state.engine === engine;
+    $('engine-' + engine).classList.toggle('selected', selected);
+    $('engine-' + engine).setAttribute('aria-pressed', String(selected));
+  }
+  $('model-hint').textContent = state.engine === 'qwen'
+    ? 'Real Qwen3-0.6B output, prompt-conditioned with numerical affect. No affective LoRA training yet.'
+    : 'Deterministic example replies; no neural model runs in this mode.';
 }
 
 function setVectorPoint(prefix, v, a) {
+  if (state.busy) return;
   const target = prefix === 'ai' ? state.current.ai : state.observed;
   target[0] = clamp(v);
   target[1] = clamp(a);
@@ -47,13 +70,14 @@ function setVectorPoint(prefix, v, a) {
 function makePlotInteractive(prefix) {
   const plot = $(prefix + '-plot');
   const updateFromPointer = (event) => {
+    if (state.busy) return;
     const rect = plot.getBoundingClientRect();
     setVectorPoint(prefix,
       2 * (event.clientX - rect.left) / rect.width - 1,
       1 - 2 * (event.clientY - rect.top) / rect.height);
   };
   plot.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return;
+    if (state.busy || event.button !== 0) return;
     plot.setPointerCapture(event.pointerId);
     updateFromPointer(event);
   });
@@ -61,6 +85,7 @@ function makePlotInteractive(prefix) {
     if (plot.hasPointerCapture(event.pointerId)) updateFromPointer(event);
   });
   plot.addEventListener('keydown', (event) => {
+    if (state.busy) return;
     const vector = prefix === 'ai' ? state.current.ai : state.observed;
     const increments = {ArrowLeft:[-0.05,0],ArrowRight:[0.05,0],ArrowUp:[0,0.05],ArrowDown:[0,-0.05]};
     const increment = increments[event.key];
@@ -100,6 +125,7 @@ function downloadJSON(name, data) {
 for (const prefix of ['ai', 'msg']) {
   makePlotInteractive(prefix);
   $(prefix + '-d').addEventListener('input', (event) => {
+    if (state.busy) return;
     const target = prefix === 'ai' ? state.current.ai : state.observed;
     target[2] = Number(event.target.value);
     state.recent = null;
@@ -108,12 +134,35 @@ for (const prefix of ['ai', 'msg']) {
 }
 for (const mode of ['vector', 'phase']) {
   $('mode-' + mode).addEventListener('click', () => {
+    if (state.busy) return;
     state.mode = mode;
     state.recent = null;
     render();
   });
 }
 $('evolve').addEventListener('change', (event) => {state.evolve = event.target.checked;render();});
+for (const engine of ['simulation', 'qwen']) {
+  $('engine-' + engine).addEventListener('click', () => {
+    if (state.busy) return;
+    state.engine = engine;
+    render();
+  });
+}
+$('load-qwen').addEventListener('click', async () => {
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    qwen ??= new BrowserQwen({onStatus: setModelStatus});
+    await qwen.load();
+    state.engine = 'qwen';
+    setModelStatus('Qwen3-0.6B ready for browser inference.');
+  } catch (error) {
+    setModelStatus(`Qwen load failed: ${error.message}`);
+  } finally {
+    setBusy(false);
+    render();
+  }
+});
 $('reset').addEventListener('click', () => {
   state.current = initialState(DEFAULTS.ai);
   state.observed = copy(DEFAULTS.message);
@@ -130,36 +179,68 @@ $('reset').addEventListener('click', () => {
   $('export-hint').textContent = 'Run an interaction before exporting an example.';
   render();
 });
-$('chat-form').addEventListener('submit', (event) => {
+$('chat-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (state.busy) return;
   const message = $('message').value.trim();
   if (!message) return;
+  if (state.engine === 'qwen' && !qwen?.ready) {
+    setModelStatus('Click “Load Qwen” before using real model inference.');
+    return;
+  }
   const before = {ai: copy(state.current.ai), phase: state.current.phase};
-  const result = stepAffect(before, state.observed, {mode: state.mode});
-  const effective = state.evolve ? result.ai : before.ai;
-  const response = templateResponse(message, effective);
-  const turn = {
-    schema_version: 1,
-    mode: state.mode,
-    user: message,
-    initial_ai_vad: before.ai,
-    observed_vad: copy(state.observed),
-    state_after_vad: copy(effective),
-    phase_before: before.phase,
-    phase_after: state.evolve ? result.phase : before.phase,
-    evolve: state.evolve,
-    alignment: result.alignment,
-    demo_template: response,
-  };
-  state.turns.push(turn);
-  state.recent = result;
-  if (state.evolve) state.current = {ai: result.ai, phase: result.phase};
-  appendBubble('user', message, `MESSAGE · ${state.mode}`);
-  appendBubble('sim', response, 'DETERMINISTIC TEMPLATE · NOT MODEL OUTPUT');
-  $('message').value = '';
-  $('target-response').value = '';
-  $('export-hint').textContent = 'Enter a human-approved target response to export a training example.';
-  render();
+  const observed = copy(state.observed);
+  const mode = state.mode;
+  const evolve = state.evolve;
+  const result = stepAffect(before, observed, {mode});
+  const effective = evolve ? result.ai : before.ai;
+  const effectivePhase = evolve ? result.phase : before.phase;
+  setBusy(true);
+  try {
+    let response;
+    if (state.engine === 'qwen') {
+      setModelStatus('Qwen is generating locally in your browser…');
+      const messages = buildQwenMessages({
+        message, mode, before: before.ai, observed, after: effective,
+        phase: effectivePhase, alignment: result.alignment,
+        history: state.turns.filter((turn) => turn.engine === 'qwen'),
+      });
+      response = await qwen.generate(messages);
+      setModelStatus('Qwen3-0.6B ready for browser inference.');
+    } else {
+      response = templateResponse(message, effective);
+    }
+    const turn = {
+      schema_version: 1,
+      mode,
+      engine: state.engine,
+      user: message,
+      initial_ai_vad: before.ai,
+      observed_vad: observed,
+      state_after_vad: copy(effective),
+      phase_before: before.phase,
+      phase_after: effectivePhase,
+      evolve,
+      alignment: result.alignment,
+      assistant: response,
+    };
+    state.turns.push(turn);
+    state.recent = result;
+    if (evolve) state.current = {ai: result.ai, phase: result.phase};
+    appendBubble('user', message, `MESSAGE · ${mode}`);
+    appendBubble('sim', response, state.engine === 'qwen'
+      ? 'QWEN3-0.6B · REAL MODEL / TEXT PROMPT CONDITIONING'
+      : 'DETERMINISTIC TEMPLATE · NOT MODEL OUTPUT');
+    $('message').value = '';
+    $('target-response').value = '';
+    $('export-hint').textContent = 'Enter a human-approved target response to export a training example.';
+  } catch (error) {
+    // Generation failure must not advance internal state or commit a training example.
+    setModelStatus(`Generation failed: ${error.message}`);
+  } finally {
+    setBusy(false);
+    render();
+  }
 });
 $('export-trace').addEventListener('click', () => downloadJSON('affective-trace.json', {
   schema_version: 1, kind: 'simulation_trace', data: state.turns,
@@ -171,7 +252,7 @@ $('export-example').addEventListener('click', () => {
     $('export-hint').textContent = 'An interaction and an authored target response are required.';
     return;
   }
-  const {demo_template, alignment, ...record} = turn;
+  const {assistant, engine, alignment, ...record} = turn;
   downloadJSON('affective-approved-example.json', {...record,
     assistant: target, provenance: 'human-authored', approved: true,
   });
