@@ -6,7 +6,7 @@
 
 A small, falsifiable experiment: can a language model learn to use a continuous affective state to vary its responses in useful ways? R0 includes two explicitly separate state-transition modes, **vector alignment** and **oscillatory phase**.
 
-**Current evidence boundary:** The browser now offers two explicitly labeled engines: a deterministic mathematical simulation, and real unmodified browser-local Qwen language generation **conditioned through ordinary text prompts**. Prompt conditioning is not the trainable affective soft-prefix/LoRA experiment. The Python research path contains that experimental training design, but **no trained affective checkpoint or empirical empathy result is published yet**.
+**Current evidence boundary:** The site offers deterministic simulation and real Qwen generation through either an opt-in local GGUF model service or browser ONNX inference on compatible hardware, **conditioned through ordinary text prompts**. Prompt conditioning is not the trainable affective soft-prefix/LoRA experiment. The Python research path contains that experimental training design, but **no trained affective checkpoint or empirical empathy result is published yet**.
 
 ## What exists
 
@@ -16,29 +16,41 @@ A small, falsifiable experiment: can a language model learn to use a continuous 
 - Inspectable transitions, transcript/trace export, and **human-authored** target-response export for training.
 - A minimal Python feature contract, trainable continuous soft-prefix mapper, LoRA training path, and one-shot local inference path.
 - Automated numerical boundary, determinism, and input-validation tests.
-- Optional browser-local Qwen inference through one Transformers.js/ONNX pipeline: Qwen3-0.6B `q4f16` on WebGPU adapters exposing `shader-f16`, otherwise Qwen2.5-0.5B-Instruct `q4` using CPU/WebAssembly. The selected model must pass a three-token prefill + decode probe before the UI claims readiness. CPU can be very slow. Model weights are downloaded by the visitor, not hosted on GitHub Pages.
+- One unchanged chat/affect pipeline with two interchangeable transports: a locally running, authenticated llama.cpp GGUF service, or the existing Transformers.js/ONNX browser worker on supported machines.
+- Browser WebGPU requires `shader-f16` for the supported Qwen3 graph. WASM/CPU is **explicit only**, because it failed session allocation (`std::bad_alloc`) on the test browser. The browser path probes three generated tokens before declaring readiness.
+- A local launcher for an existing Qwen3-1.7B GGUF file; the service binds to loopback and restricts CORS to the intended page origins.
 - A single GitHub Pages workflow that runs browser/data tests and deploys the static site; no GPUs or model weights in CI.
 
-## Try the public demonstration
+## Use your existing GGUF model (recommended on Linux / Vivaldi)
 
-Open [the GitHub Pages site](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/). Click the two plots, select a mode, and enter a message. The default **Simulation** engine gives a deterministic example template. Switch to **Browser Qwen (auto)**, click **Load Qwen in browser**, and use the same controls to generate an answer from a real pretrained Qwen model. The site remains static and requires no API key or remote text-generation server. Your browser fetches model/JS binaries from Hugging Face and a CDN; inference itself runs locally. Automatic mode checks both the WebGPU adapter and its `shader-f16` feature. If supported, Qwen3 runs on WebGPU; otherwise Qwen2.5 runs on **CPU / WebAssembly**, not WebGPU. The prior Qwen3 and Qwen2.5 `q4` WebGPU attempts failed with `Gather requires f16` on devices without that feature. `q4` describes weight storage, not a guarantee that the ONNX computation uses no FP16 operations. Loading now probes **three generated tokens** so both the prefill and token-decoding paths are exercised before claiming readiness. Streaming, cancellation, diagnostics and trace export remain supported. Automatic CPU fallback requires sufficient RAM and can be very slow; on CPU the default completion budget is 48 tokens. An explicit CPU selection is also available. Neither a model variant nor CPU mode is guaranteed to work on every device. Simulation remains available.
+Your public [GitHub Pages interface](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/) can connect **from your browser to a model on the same computer**. It is not a public GPU hosting service: each visitor would need their own compatible browser model or local service. The site never starts or scans for local services without an explicit click.
 
-### Browser setup and diagnostics
-
-The site probes the actual WebGPU adapter instead of assuming compatibility from the browser name. It shows whether `shader-f16` is exposed and explains the selected execution provider and datatype. Automatic mode never attempts WebGPU if that feature is absent. The **Browser setup and troubleshooting** panel provides browser-specific guidance. Browser identification is best-effort: Vivaldi can identify itself as Chrome, so visitors can select **Vivaldi** manually.
-
-For **Vivaldi on Linux**, enable Hardware Acceleration in `vivaldi://settings`, inspect `vivaldi://gpu`, and restart after any changes. Advanced troubleshooting may include `vivaldi://flags/#enable-vulkan` and `vivaldi://flags/#enable-unsafe-webgpu`, but unsafe WebGPU overrides browser safeguards and should not be the default recommendation. **Those flags cannot create missing GPU `shader-f16` capabilities.** Automatic mode selects the CPU/WebAssembly execution provider when `shader-f16` is missing; explicit CPU mode is also available. A `Gather requires f16` error now produces a targeted diagnostic instead of an opaque ONNX Runtime stack trace.
-
-The page does not transmit your conversation to a remote inference API. Its code and ONNX weights are downloaded from public sources, and generation happens on your own device.
-
-**This is an intentionally limited demonstration.** The selected VAD values and calculated phase/alignment are serialized into a system message for Qwen. This verifies the end-to-end UI-to-real-text-generation path and allows qualitative comparison, but does **not** inject continuous soft-prefix embeddings, load a trained affective LoRA, or demonstrate that a model has learned emotional dynamics. Browser checkpoints: [`onnx-community/Qwen3-0.6B-ONNX`](https://huggingface.co/onnx-community/Qwen3-0.6B-ONNX) (shader-f16 devices), [`onnx-community/Qwen2.5-0.5B-Instruct`](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) (CPU/WebAssembly). The UI records the exact model ID and precision in every Qwen trace. The three GGUF paths on a researcher's Linux machine are not accessible from a public GitHub Page and cannot be used directly by this WebGPU ONNX adapter.
-
-On a local checkout, serve the `web` directory rather than opening `index.html` as a file (JavaScript modules require HTTP in most browsers):
+Install or build a recent [llama.cpp `llama-server`](https://github.com/ggml-org/llama.cpp/tree/master/tools/server) and make the executable available on your `PATH`. A CPU-only build works; a CUDA/Vulkan-enabled build can optionally offload layers to the GPU. Then, in your local clone of this repository:
 
 ```bash
-python3 -m http.server 8000 --directory web
-# Browse http://localhost:8000
+bash scripts/run-local-qwen.sh
 ```
+
+The script defaults to your cached `Qwen3-1.7B-Q4_K_M.gguf`. Optionally pass one of your other model paths as the first argument. To use a compatible GPU backend, set `SMI_GPU_LAYERS=99` (only if `llama-server` was built with GPU support). The script refuses to run if the model file or binary is missing. You can set `LLAMA_SERVER=/path/to/llama-server` if it is not on PATH.
+
+The script prints the API key it generated once in `~/.config/smi-affective/llama-api-key`. It creates the key with restrictive file permissions and reuses it on subsequent launches. In the website, choose **Local GGUF server**, paste that key into the session-only field, then click **Connect local Qwen**. It queries `http://127.0.0.1:8080/v1/models` and uses the reported model ID for `/v1/chat/completions` with streamed responses. **The key is never stored in localStorage, sent to GitHub, or included in exported traces.**
+
+`llama-server` binds to `127.0.0.1` rather than all network interfaces, restricts the allowed CORS origins to the GitHub Pages site and supported local development origins, and uses a required API key. Do not remove those restrictions or enable llama.cpp agent/tool capabilities merely to make the demo work. Browsers can ask for permission to access loopback-network resources from a public HTTPS page; allow it only for this research site if you trust its source. If your browser still blocks the public page's loopback request, run the **same static UI locally**:
+
+```bash
+python3 -m http.server 8000 --bind 127.0.0.1 --directory web
+# Open http://127.0.0.1:8000
+```
+
+This is the same UI and state logic, not a second runtime. Check the browser console for CORS, Local Network Access, or mixed-content errors. A failure to connect is not evidence that your local Qwen model cannot generate; verify the server independently before changing model files.
+
+## Browser ONNX mode (secondary experiment)
+
+Select **Browser WebGPU** only if the page reports `shader-f16` support. The browser downloads Qwen3-0.6B ONNX weights and runs the model inside the browser worker, using a three-token readiness probe. This mode does not connect to your GGUF files. **Browser CPU / WebAssembly** is retained only as an explicitly selected, high-memory experiment; it is not a dependable fallback. An ONNX `std::bad_alloc` during session creation means the runtime could not allocate memory, not that the affective state math failed. The supported browser graph may also fail on individual GPUs; the app should show the failure rather than pretending generation succeeded.
+
+For **Vivaldi on Linux**, hardware acceleration and WebGPU are diagnosed in `vivaldi://gpu`. Advanced flags such as `vivaldi://flags/#enable-vulkan` or `vivaldi://flags/#enable-unsafe-webgpu` bypass browser safeguards and cannot add missing `shader-f16` capability. These flags are **not required** for the local GGUF service path.
+
+**Evidence boundary:** Both real-model routes send manually selected VAD and phase/alignment information as ordinary prompt text. Neither loads or proves a trained affective LoRA or continuous soft-prefix. Their generated responses are real language-model inference, but the comparison currently tests **prompt conditioning**, not learned affective representations.
 
 ## Train a real local model (experimental)
 
@@ -101,7 +113,7 @@ flowchart LR
 - **Feature contract:** nine floats (3 updated VAD + 3 observed VAD + mode bit + 2 phase features). Mode changes the transition and the representation, not the transformer topology.
 - **Training:** assistant-target next-token cross-entropy; projector and LoRA trainable; original model weights frozen.
 - **Inference:** ordinary transformer forward passes, with a small prefix-embedding adapter. The Python CLI demonstrates this without a new inference runtime.
-- **Hosting:** GitHub Pages cannot execute Python/Qwen inference servers, but its static frontend can run the small ONNX Qwen model on visitors' WebGPU devices. Serving our future LoRA/soft-prefix Qwen model will require a compatible browser export or a separately hosted model runtime. Do not paste private API tokens into a public page.
+- **Hosting:** GitHub Pages hosts only the frontend. Its model routes are a browser-local ONNX worker or an **explicitly connected** authenticated server on the visitor's own loopback interface. A truly public chat demonstration would require an independently hosted inference endpoint. No trained LoRA or continuous soft-prefix is currently served. Local API keys are entered per session and are never persisted in the page.
 
 The R0 transition is a hand-defined experimental hypothesis, not an established theory of psychological emotion or evidence that a model has subjective feelings. Its parameters, and any later learned dynamics, must be evaluated against baselines and held-out scenarios. See [research design](docs/RESEARCH.md).
 
@@ -112,7 +124,7 @@ node --test tests/affect.test.mjs
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The Pages deployment runs both of these tests in the same deployment workflow to minimize GitHub Actions executions. The workflow does not start model training.
+The Pages deployment runs these browser and Python contract tests in the same deployment workflow to minimize GitHub Actions executions. The workflow does not start model training.
 
 ## Research roadmap
 

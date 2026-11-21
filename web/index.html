@@ -20,7 +20,7 @@
       <div class="eyebrow"><span class="live-indicator"></span> PROTOTYPE R0 / INTERACTIVE RESEARCH</div>
       <h1>Affective <em>Conditioning</em></h1>
       <p class="lead">Explore how a simulated AI state interacts with an observed message state. Change both vectors directly, switch the dynamics model, and inspect every state transition.</p>
-      <div class="notice"><strong>Two separate experiments.</strong> Simulation uses deterministic example responses. Browser Qwen produces real language-model responses using text-prompts containing the selected affect values. <strong>No affect-conditioned LoRA is trained or running here yet.</strong> The application does not predict anyone’s emotions.</div>
+      <div class="notice"><strong>Two separate experiments.</strong> Simulation uses deterministic example responses. Real Qwen can run through a local GGUF server or compatible browser inference, using text prompts containing the selected affect values. <strong>No affect-conditioned LoRA is trained or running here yet.</strong> The application does not predict anyone’s emotions.</div>
 
       <section class="panel model-panel" aria-labelledby="model-heading">
         <div><span class="section-number">00 / INFERENCE</span><h3 id="model-heading">Response engine</h3></div>
@@ -31,16 +31,22 @@
         <div class="actions">
           <label for="model-backend" class="inference-choice">Runtime
             <select id="model-backend" aria-label="Inference backend">
-              <option value="auto">Automatic (GPU if FP16 supported; otherwise CPU)</option>
-              <option value="cpu">CPU / WebAssembly (slow)</option>
+              <option value="local">Local GGUF server (recommended)</option>
+              <option value="auto">Browser WebGPU (requires shader-f16)</option>
+              <option value="cpu">Browser CPU / WebAssembly (experimental; high memory)</option>
             </select>
           </label>
-          <button type="button" class="secondary" id="load-qwen">Load Qwen in browser</button>
+          <button type="button" class="secondary" id="load-qwen">Connect local Qwen</button>
           <span id="model-status" role="status" aria-live="polite" class="hint">Checking browser GPU support…</span>
+        </div>
+        <div id="local-server-setup" class="local-server-setup">
+          <label for="local-api-key">Local server API key (session only, never saved)</label>
+          <input id="local-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key printed by scripts/run-local-qwen.sh">
+          <p class="hint">Start <code>scripts/run-local-qwen.sh</code> on your computer, then connect. The site contacts only <code>127.0.0.1:8080</code>. It cannot reach your model from other visitors' computers. A browser may ask for loopback network access permission.</p>
         </div>
         <div class="browser-support">
           <div class="browser-support-row"><strong id="gpu-health">Checking WebGPU…</strong><button type="button" id="gpu-check" class="secondary">Check again</button></div>
-          <p class="hint" id="gpu-recommendation">GPU execution requires shader-f16 for the supported Qwen graph. Automatic mode uses CPU / WebAssembly on adapters without it. A three-token execution check tests both prompt processing and decoding.</p>
+          <p class="hint" id="gpu-recommendation">Browser WebGPU requires shader-f16. CPU/WebAssembly can run out of memory. Local GGUF is recommended for incompatible browsers.</p>
           <details id="browser-help"><summary>Browser setup and troubleshooting</summary>
             <div class="browser-guide">
               <label for="browser-choice">Browser guide</label>
@@ -102,7 +108,7 @@
         <div><span class="section-number">06 / DATASET</span><h3>Approved training example</h3><p>To collect a supervised training example, write the response you actually want the model to learn. The demonstration's automatic template is <strong>not</strong> training ground truth.</p></div>
         <label for="target-response">Human-authored target assistant response</label><textarea id="target-response" rows="3" placeholder="Write or edit the ideal assistant response here…" maxlength="1000"></textarea><div class="actions"><button type="button" id="export-example" class="secondary">Export approved example (.json)</button><span class="hint" id="export-hint" role="status">Run an interaction before exporting an example.</span></div>
       </section>
-      <footer>SUPERIOR MI LABS · AFFECTIVE CONDITIONING R0 <span>Valence / Arousal / Dominance · Optional browser-local Qwen</span></footer>
+      <footer>SUPERIOR MI LABS · AFFECTIVE CONDITIONING R0 <span>Valence / Arousal / Dominance · Browser Qwen / Local GGUF</span></footer>
     </main>
   </div>
 </body>

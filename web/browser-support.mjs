@@ -67,20 +67,16 @@ export async function inspectWebGPU(gpu) {
 // no-f16 strategy is to switch execution providers, not only dtype.
 // CPU execution still requires device-specific verification.
 export function inferencePlan(capability, preference = 'auto') {
-  if (!['auto', 'cpu'].includes(preference)) throw new TypeError('Invalid inference backend.');
-  if (preference === 'auto' && capability?.status === 'ready' && capability.shaderF16 === true) {
-    return {
-      device: 'webgpu', dtype: 'q4f16', model: 'onnx-community/Qwen3-0.6B-ONNX',
-      label: 'Qwen3-0.6B', reason: 'WebGPU adapter reports shader-f16',
-    };
-  }
-  return {
+  if (!['auto', 'cpu'].includes(preference)) throw new TypeError('Invalid browser inference backend.');
+  if (preference === 'cpu') return {
     device: 'wasm', dtype: 'q4', model: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    label: 'Qwen2.5-0.5B-Instruct',
-    reason: preference === 'cpu'
-      ? 'CPU / WebAssembly explicitly selected'
-      : 'No shader-f16-capable WebGPU adapter: using CPU / WebAssembly (slower)',
+    label: 'Qwen2.5-0.5B-Instruct', reason: 'CPU / WebAssembly explicitly selected; substantial browser RAM required',
   };
+  if (capability?.status === 'ready' && capability.shaderF16 === true) return {
+    device: 'webgpu', dtype: 'q4f16', model: 'onnx-community/Qwen3-0.6B-ONNX',
+    label: 'Qwen3-0.6B', reason: 'WebGPU adapter reports shader-f16',
+  };
+  throw new Error('Browser WebGPU cannot execute this model without shader-f16. Choose Local GGUF server to use your existing Qwen models, or explicitly try the memory-intensive CPU option.');
 }
 
 export function modelFailureMessage(error) {
@@ -88,8 +84,8 @@ export function modelFailureMessage(error) {
   if (/requires f16|shader-f16|does not support fp16|device does not support f16/i.test(raw)) {
     return 'A WebGPU kernel requires shader-f16, which the selected adapter cannot execute. Use CPU / WebAssembly mode or a supported GPU/driver. Quantizing the weights does not remove all FP16 operations. Details: ' + raw;
   }
-  if (/out of memory|allocation failed|memory limit|OOM/i.test(raw)) {
-    return 'Insufficient GPU/browser memory for this model. Close GPU-heavy tabs or try CPU mode (requires substantial RAM). Details: ' + raw;
+  if (/out of memory|allocation failed|memory limit|OOM|bad_alloc|can.t create a session/i.test(raw)) {
+    return 'The browser model could not allocate its ONNX session. CPU/WebAssembly is not a reliable fallback on this device. Choose Local GGUF server to run the model outside the browser, or inspect browser/OS memory usage. Details: ' + raw;
   }
   return raw;
 }

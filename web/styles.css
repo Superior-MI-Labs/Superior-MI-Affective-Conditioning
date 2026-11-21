@@ -21,3 +21,11 @@
 /* Keep native hidden controls hidden even where shared button styles override display. */
 #cancel-qwen[hidden]{display:none}
 .conversation .bubble div{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Local execution is opt-in, with an ephemeral key and no persistent storage. */
+.local-server-setup{grid-column:1/-1;display:grid;gap:10px;border:1px solid #335766;background:#0d202a;border-radius:9px;padding:15px}
+.local-server-setup[hidden]{display:none}
+.local-server-setup label{font-size:12px;color:#c6dbe1}
+.local-server-setup input{width:100%;max-width:620px;background:#0b1822;color:#eff7f8;border:1px solid #426271;border-radius:7px;padding:10px}
+.local-server-setup p{margin:0;line-height:1.65}
+.local-server-setup code{color:#b2dcd9}

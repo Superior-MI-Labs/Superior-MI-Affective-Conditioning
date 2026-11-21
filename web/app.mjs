@@ -1,7 +1,8 @@
 import {DEFAULTS, clamp, initialState, stepAffect, affectName, templateResponse} from './affect.mjs';
 import {buildQwenMessages} from './qwen-prompt.mjs';
 import {BrowserQwen} from './qwen-client.mjs';
-import {BROWSER_NAMES, browserFamily, browserGuidance} from './browser-support.mjs';
+import {LocalQwen} from './local-qwen.mjs';
+import {BROWSER_NAMES, browserFamily, browserGuidance, inspectWebGPU} from './browser-support.mjs';
 
 const $ = (id) => document.getElementById(id);
 const copy = (a) => [...a];
@@ -21,8 +22,20 @@ const state = {
 let qwen;
 const inferredBrowser = browserFamily(navigator.userAgent, Boolean(window.vivaldi));
 function ensureQwen() {
-  qwen ??= new BrowserQwen({onStatus: setModelStatus});
+  const local = $('model-backend').value === 'local';
+  if (qwen && (qwen instanceof LocalQwen) !== local) {
+    qwen.dispose();
+    qwen = undefined;
+  }
+  qwen ??= local
+    ? new LocalQwen({apiKey: () => $('local-api-key').value})
+    : new BrowserQwen({onStatus: setModelStatus});
   return qwen;
+}
+function renderRuntimeChoice() {
+  const local = $('model-backend').value === 'local';
+  $('local-server-setup').hidden = !local;
+  $('load-qwen').textContent = local ? 'Connect local Qwen' : 'Load Qwen in browser';
 }
 function renderBrowserGuide() {
   const selected = $('browser-choice').value;
@@ -43,7 +56,7 @@ async function checkWebGPU() {
   $('gpu-health').textContent = 'Checking GPU adapter…';
   $('gpu-check').disabled = true;
   try {
-    const capability = await ensureQwen().diagnose();
+    const capability = await inspectWebGPU(navigator.gpu);
     if (capability.status === 'ready') {
       $('gpu-health').textContent = `WebGPU adapter available · shader-f16 ${capability.shaderF16 ? 'supported' : 'unavailable'}`;
       $('gpu-recommendation').textContent = capability.shaderF16
@@ -65,7 +78,7 @@ async function checkWebGPU() {
 function setModelStatus(message) { $('model-status').textContent = message; }
 function setBusy(value) {
   state.busy = value;
-  for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'model-backend', 'ai-d', 'msg-d']) $(id).disabled = value;
+  for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'model-backend', 'local-api-key', 'ai-d', 'msg-d']) $(id).disabled = value;
   $('message').disabled = value;
   $('gpu-check').disabled = value;
   $('cancel-qwen').hidden = !value || state.engine !== 'qwen';
@@ -196,6 +209,7 @@ for (const engine of ['simulation', 'qwen']) {
   });
 }
 $('browser-choice').addEventListener('change', renderBrowserGuide);
+$('model-backend').addEventListener('change', renderRuntimeChoice);
 $('gpu-check').addEventListener('click', checkWebGPU);
 $('cancel-qwen').addEventListener('click', () => {
   if (!state.busy || state.engine !== 'qwen' || !qwen) return;
@@ -206,9 +220,10 @@ $('load-qwen').addEventListener('click', async () => {
   if (state.busy) return;
   setBusy(true);
   try {
-    const plan = await ensureQwen().load($('model-backend').value);
+    const backend = $('model-backend').value;
+    const plan = await ensureQwen().load(backend);
     state.engine = 'qwen';
-    setModelStatus(`${plan.label} verified (${plan.device}, ${plan.dtype}). ${plan.reason}.`);
+    setModelStatus(`${plan.label} ${plan.device === 'local' ? 'connected' : 'verified'} (${plan.device}, ${plan.dtype}). ${plan.reason}.`);
   } catch (error) {
     setModelStatus(`Qwen load failed: ${error.message}`);
     $('browser-help').open = true;
@@ -253,6 +268,7 @@ $('chat-form').addEventListener('submit', async (event) => {
   let outputNode;
   let visibleText = '';
   let tokenCount = 0;
+  let streamChunks = 0;
   let began = 0;
   let statusTimer;
   try {
@@ -264,9 +280,11 @@ $('chat-form').addEventListener('submit', async (event) => {
       setModelStatus(`Qwen preparing prompt (${qwen.plan.device}); first token may take time…`);
       statusTimer = setInterval(() => {
         const seconds = Math.floor((performance.now() - began) / 1000);
-        setModelStatus(tokenCount
-          ? `Generating: ${tokenCount} tokens · ${seconds}s elapsed`
-          : `Waiting for first token · ${seconds}s elapsed${seconds >= 30 ? ' · slow inference? Use Stop generation if needed.' : ''}`);
+        const count = qwen.plan.device === 'local' ? streamChunks : tokenCount;
+        const unit = qwen.plan.device === 'local' ? 'text chunks' : 'tokens';
+        setModelStatus(count
+          ? `Generating: ${count} ${unit} · ${seconds}s elapsed`
+          : `Waiting for first output · ${seconds}s elapsed${seconds >= 30 ? ' · Use Stop generation if needed.' : ''}`);
       }, 1000);
       const messages = buildQwenMessages({
         message, mode, before: before.ai, observed, after: effective,
@@ -274,18 +292,19 @@ $('chat-form').addEventListener('submit', async (event) => {
         history: state.turns.filter((turn) => turn.engine === 'qwen' && turn.model_id === qwen.plan.model),
         supportsThinking: qwen.plan.model.includes('Qwen3-'),
       });
-      response = await qwen.generate(messages, ({delta, tokens}) => {
+      response = await qwen.generate(messages, ({delta, tokens, chunks}) => {
         if (typeof tokens === 'number') tokenCount = tokens;
+        if (typeof chunks === 'number') streamChunks = chunks;
         if (delta) {
           visibleText += delta;
           outputNode.textContent = visibleText;
           $('conversation').scrollTop = $('conversation').scrollHeight;
         }
         const elapsed = ((performance.now() - began) / 1000).toFixed(0);
-        setModelStatus(`Generating: ${tokenCount} tokens · ${elapsed}s elapsed`);
+        setModelStatus(`Generating: ${qwen.plan.device === 'local' ? streamChunks + ' text chunks' : tokenCount + ' tokens'} · ${elapsed}s elapsed`);
       });
       outputNode.textContent = response;
-      setModelStatus(`${qwen.plan.label} ready (${qwen.plan.device}, ${qwen.plan.dtype}); ${tokenCount} generated tokens.`);
+      setModelStatus(`${qwen.plan.label} ready (${qwen.plan.device}, ${qwen.plan.dtype}); ${qwen.plan.device === 'local' ? streamChunks + ' streamed chunks' : tokenCount + ' generated tokens'}.`);
     } else {
       response = templateResponse(message, effective);
     }
@@ -326,7 +345,7 @@ $('chat-form').addEventListener('submit', async (event) => {
       outputNode.parentElement.querySelector('small').textContent = 'QWEN · INCOMPLETE / NOT SAVED';
     }
     setModelStatus(`Generation ${/canceled/i.test(error.message) ? 'canceled' : 'failed'}: ${error.message}`);
-    if (!/canceled/i.test(error.message)) $('browser-help').open = true;
+    if (!/canceled|stopped/i.test(error.message) && $('model-backend').value !== 'local') $('browser-help').open = true;
   } finally {
     if (statusTimer) clearInterval(statusTimer);
     setBusy(false);
@@ -350,5 +369,6 @@ $('export-example').addEventListener('click', () => {
   $('export-hint').textContent = 'Example exported. Review the values before adding it to a dataset.';
 });
 renderBrowserGuide();
+renderRuntimeChoice();
 render();
 void checkWebGPU();
