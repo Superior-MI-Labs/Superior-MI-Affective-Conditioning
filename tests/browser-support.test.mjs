@@ -25,17 +25,23 @@ test('WebGPU probe distinguishes missing API, missing adapter, unsupported and s
 });
 
 test('the model never selects an f16 dtype when the adapter does not expose shader-f16', () => {
-  assert.deepEqual(inferencePlan({status:'ready',shaderF16:false}),
-    {device:'webgpu',dtype:'q4',reason:'16-bit shaders unavailable: use float32-compatible q4'});
-  assert.equal(inferencePlan({status:'ready',shaderF16:true}).dtype,'q4f16');
-  assert.equal(inferencePlan({status:'api-unavailable'},'cpu').device,'wasm');
+  const noF16 = inferencePlan({status:'ready',shaderF16:false});
+  assert.equal(noF16.device,'webgpu');
+  assert.equal(noF16.dtype,'q4');
+  assert.equal(noF16.model, 'onnx-community/Qwen2.5-0.5B-Instruct');
+  const f16 = inferencePlan({status:'ready',shaderF16:true});
+  assert.equal(f16.dtype, 'q4f16');
+  assert.equal(f16.model, 'onnx-community/Qwen3-0.6B-ONNX');
+  const cpu = inferencePlan({status:'api-unavailable'},'cpu');
+  assert.equal(cpu.device,'wasm');
+  assert.equal(cpu.model, noF16.model);
   assert.throws(()=>inferencePlan({status:'adapter-unavailable'}),/CPU/);
   assert.throws(()=>inferencePlan({status:'ready'},'unknown'),TypeError);
 });
 
 test('runtime f16 errors and memory failures produce actionable messages', () => {
   const error=modelFailureMessage(new Error('GenerateSourceCode Program Gather requires f16 but the device does not support it'));
-  assert.match(error,/CPU \(slow\)/);
+  assert.match(error,/CPU \/ WebAssembly \(slow\)/);
   assert.match(error,/Details: GenerateSourceCode/);
   assert.match(modelFailureMessage('GPU out of memory'),/Insufficient/);
 });

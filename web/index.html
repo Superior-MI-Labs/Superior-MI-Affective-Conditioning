@@ -26,12 +26,12 @@
         <div><span class="section-number">00 / INFERENCE</span><h3 id="model-heading">Response engine</h3></div>
         <div class="segmented" role="group" aria-label="Response engine">
           <button type="button" id="engine-simulation" class="selected" aria-pressed="true">Deterministic simulation</button>
-          <button type="button" id="engine-qwen" aria-pressed="false">Browser Qwen3-0.6B</button>
+          <button type="button" id="engine-qwen" aria-pressed="false">Browser Qwen (auto)</button>
         </div>
         <div class="actions">
           <label for="model-backend" class="inference-choice">Runtime
             <select id="model-backend" aria-label="Inference backend">
-              <option value="webgpu">WebGPU (automatic precision)</option>
+              <option value="webgpu">WebGPU (compatible Qwen model)</option>
               <option value="cpu">CPU / WebAssembly (slow)</option>
             </select>
           </label>
@@ -40,7 +40,7 @@
         </div>
         <div class="browser-support">
           <div class="browser-support-row"><strong id="gpu-health">Checking WebGPU…</strong><button type="button" id="gpu-check" class="secondary">Check again</button></div>
-          <p class="hint" id="gpu-recommendation">The 16-bit shader feature is checked separately from WebGPU availability.</p>
+          <p class="hint" id="gpu-recommendation">The 16-bit shader feature is checked separately from WebGPU availability. Model readiness requires an actual one-token execution check.</p>
           <details id="browser-help"><summary>Browser setup and troubleshooting</summary>
             <div class="browser-guide">
               <label for="browser-choice">Browser guide</label>

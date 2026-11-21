@@ -3,7 +3,7 @@ import {validateVAD} from './affect.mjs';
 
 const fmt = (vector) => vector.map((n) => n.toFixed(2)).join(', ');
 
-export function buildQwenMessages({message, mode, before, observed, after, phase, alignment, history = []}) {
+export function buildQwenMessages({message, mode, before, observed, after, phase, alignment, history = [], supportsThinking = true}) {
   if (typeof message !== 'string' || !message.trim()) throw new TypeError('Nonempty message required');
   if (!['vector', 'phase'].includes(mode)) throw new TypeError('Unsupported mode');
   for (const vector of [before, observed, after]) validateVAD(vector);
@@ -31,6 +31,6 @@ export function buildQwenMessages({message, mode, before, observed, after, phase
     messages.push({role: 'user', content: turn.user});
     messages.push({role: 'assistant', content: turn.assistant});
   }
-  messages.push({role: 'user', content: message.trim() + '\n/no_think'});
+  messages.push({role: 'user', content: message.trim() + (supportsThinking ? '\n/no_think' : '')});
   return messages;
 }

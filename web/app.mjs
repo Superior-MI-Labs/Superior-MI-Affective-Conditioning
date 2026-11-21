@@ -47,8 +47,8 @@ async function checkWebGPU() {
     if (capability.status === 'ready') {
       $('gpu-health').textContent = `WebGPU adapter available · shader-f16 ${capability.shaderF16 ? 'supported' : 'unavailable'}`;
       $('gpu-recommendation').textContent = capability.shaderF16
-        ? 'WebGPU will load the q4f16 model, which uses half-precision shader operations.'
-        : 'WebGPU is available but shader-f16 is not. WebGPU will select the q4 model (float32-compatible activations); CPU mode remains available if inference still fails.';
+        ? 'WebGPU will use Qwen3-0.6B q4f16. Execution is checked before the model is marked ready.'
+        : 'Your adapter lacks shader-f16. The older Qwen3 q4 graph failed here; WebGPU will use Qwen2.5-0.5B-Instruct q4 instead, with an execution check. CPU mode is available if needed.';
     } else {
       $('gpu-health').textContent = `WebGPU unavailable (${capability.status})`;
       $('gpu-recommendation').textContent = 'Use the browser setup guide below, or choose CPU / WebAssembly explicitly. CPU inference can be very slow and needs substantial RAM.';
@@ -99,7 +99,7 @@ function render() {
     $('engine-' + engine).setAttribute('aria-pressed', String(selected));
   }
   $('model-hint').textContent = state.engine === 'qwen'
-    ? 'Real Qwen3-0.6B output, prompt-conditioned with numerical affect. No affective LoRA training yet.'
+    ? `Real ${(qwen?.plan?.label ?? 'Qwen')} output using text-based affect prompts. No trained affective LoRA yet.`
     : 'Deterministic example replies; no neural model runs in this mode.';
 }
 
@@ -208,7 +208,7 @@ $('load-qwen').addEventListener('click', async () => {
   try {
     const plan = await ensureQwen().load($('model-backend').value);
     state.engine = 'qwen';
-    setModelStatus(`Qwen3-0.6B ready (${plan.device}, ${plan.dtype}).`);
+    setModelStatus(`${plan.label} verified (${plan.device}, ${plan.dtype}).`);
   } catch (error) {
     setModelStatus(`Qwen load failed: ${error.message}`);
     $('browser-help').open = true;
@@ -260,7 +260,7 @@ $('chat-form').addEventListener('submit', async (event) => {
     if (state.engine === 'qwen') {
       began = performance.now();
       appendBubble('user', message, `MESSAGE · ${mode}`);
-      outputNode = appendBubble('sim', 'Preparing prompt…', 'QWEN3-0.6B · GENERATING');
+      outputNode = appendBubble('sim', 'Preparing prompt…', `${qwen.plan.label.toUpperCase()} · GENERATING`);
       setModelStatus('Qwen preparing prompt; the first token may take time on WebGPU…');
       statusTimer = setInterval(() => {
         const seconds = Math.floor((performance.now() - began) / 1000);
@@ -271,7 +271,8 @@ $('chat-form').addEventListener('submit', async (event) => {
       const messages = buildQwenMessages({
         message, mode, before: before.ai, observed, after: effective,
         phase: effectivePhase, alignment: result.alignment,
-        history: state.turns.filter((turn) => turn.engine === 'qwen'),
+        history: state.turns.filter((turn) => turn.engine === 'qwen' && turn.model_id === qwen.plan.model),
+        supportsThinking: qwen.plan.model.includes('Qwen3-'),
       });
       response = await qwen.generate(messages, ({delta, tokens}) => {
         if (typeof tokens === 'number') tokenCount = tokens;
@@ -284,7 +285,7 @@ $('chat-form').addEventListener('submit', async (event) => {
         setModelStatus(`Generating: ${tokenCount} tokens · ${elapsed}s elapsed`);
       });
       outputNode.textContent = response;
-      setModelStatus(`Qwen3-0.6B ready (${qwen.plan.device}, ${qwen.plan.dtype}); ${tokenCount} generated tokens.`);
+      setModelStatus(`${qwen.plan.label} ready (${qwen.plan.device}, ${qwen.plan.dtype}); ${tokenCount} generated tokens.`);
     } else {
       response = templateResponse(message, effective);
     }
@@ -301,6 +302,7 @@ $('chat-form').addEventListener('submit', async (event) => {
       evolve,
       alignment: result.alignment,
       assistant: response,
+      ...(state.engine === 'qwen' ? {model_id: qwen.plan.model, device: qwen.plan.device, dtype: qwen.plan.dtype} : {}),
     };
     state.turns.push(turn);
     state.recent = result;
@@ -310,7 +312,7 @@ $('chat-form').addEventListener('submit', async (event) => {
       appendBubble('sim', response, 'DETERMINISTIC TEMPLATE · NOT MODEL OUTPUT');
     } else {
       outputNode.parentElement.querySelector('small').textContent =
-        'QWEN3-0.6B · REAL MODEL / TEXT PROMPT CONDITIONING';
+        `${qwen.plan.label.toUpperCase()} · REAL MODEL / TEXT PROMPT CONDITIONING`;
     }
     $('message').value = '';
     $('target-response').value = '';
@@ -341,7 +343,7 @@ $('export-example').addEventListener('click', () => {
     $('export-hint').textContent = 'An interaction and an authored target response are required.';
     return;
   }
-  const {assistant, engine, alignment, ...record} = turn;
+  const {assistant, engine, alignment, model_id, device, dtype, ...record} = turn;
   downloadJSON('affective-approved-example.json', {...record,
     assistant: target, provenance: 'human-authored', approved: true,
   });

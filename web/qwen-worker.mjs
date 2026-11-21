@@ -1,11 +1,11 @@
 // Qwen remains unmodified: both affect modes condition it via ordinary prompt text.
 // Keep the WebGPU check and model precision selection explicit and inspectable.
 import {inspectWebGPU, inferencePlan, modelFailureMessage} from './browser-support.mjs';
-
-const MODEL = 'onnx-community/Qwen3-0.6B-ONNX';
+import {probeGeneration} from './qwen-probe.mjs';
 const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';
 let generator;
 let loadedPreference;
+let activePlan;
 let loading;
 let transformers;
 
@@ -14,7 +14,7 @@ function reply(id, value) { self.postMessage({type: 'result', id, value}); }
 function failure(id, error) { self.postMessage({type: 'error', id, message: modelFailureMessage(error)}); }
 
 async function loadModel(preference = 'webgpu') {
-  if (generator && loadedPreference === preference) return {device: preference === 'cpu' ? 'wasm' : 'webgpu'};
+  if (generator && loadedPreference === preference) return activePlan;
   if (loading) return loading;
   loading = (async () => {
     const capabilities = await inspectWebGPU(self.navigator?.gpu);
@@ -23,11 +23,12 @@ async function loadModel(preference = 'webgpu') {
       await generator.dispose?.();
       generator = undefined;
       loadedPreference = undefined;
+      activePlan = undefined;
     }
-    status(`Loading Qwen3-0.6B (${plan.device}, ${plan.dtype}). First use downloads model weights.`);
+    status(`Loading ${plan.label} (${plan.device}, ${plan.dtype}). First use downloads model weights.`);
     transformers ??= await import(TRANSFORMERS_CDN);
     const {pipeline} = transformers;
-    const created = await pipeline('text-generation', MODEL, {
+    const created = await pipeline('text-generation', plan.model, {
       device: plan.device,
       dtype: plan.dtype,
       progress_callback: (event) => {
@@ -36,9 +37,17 @@ async function loadModel(preference = 'webgpu') {
         }
       },
     });
+    try {
+      status(`Testing ${plan.label} execution (one token)…`);
+      await probeGeneration(created);
+    } catch (error) {
+      await created.dispose?.();
+      throw new Error(`Execution test failed for ${plan.label} (${plan.device}, ${plan.dtype}): ${modelFailureMessage(error)}`);
+    }
     generator = created;
     loadedPreference = preference;
-    status(`Qwen ready (${plan.device}, ${plan.dtype}). Generation runs locally in this browser.`);
+    activePlan = plan;
+    status(`${plan.label} verified (${plan.device}, ${plan.dtype}). Generation runs locally in this browser.`);
     return plan;
   })().finally(() => {loading = null;});
   return loading;
@@ -75,7 +84,7 @@ self.onmessage = async ({data}) => {
       const output = await generator(data.messages, {
         max_new_tokens: 96,
         do_sample: false,
-        tokenizer_encode_kwargs: {enable_thinking: false},
+        ...(activePlan.model.includes('Qwen3-') ? {tokenizer_encode_kwargs: {enable_thinking: false}} : {}),
         streamer,
       });
       const conversation = output?.[0]?.generated_text;

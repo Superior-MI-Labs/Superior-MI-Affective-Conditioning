@@ -62,23 +62,32 @@ export async function inspectWebGPU(gpu) {
   }
 }
 
+// These are separate model artifacts, not separate inference engines. A q4 weight
+// label alone does NOT guarantee an entirely fp32 ONNX graph (see issue R4).
 export function inferencePlan(capability, preference = 'webgpu') {
-  if (preference === 'cpu') return {device: 'wasm', dtype: 'q4', reason: 'CPU explicitly selected'};
+  if (preference === 'cpu') return {
+    device: 'wasm', dtype: 'q4', model: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    label: 'Qwen2.5-0.5B-Instruct', reason: 'Explicit CPU / WebAssembly fallback',
+  };
   if (preference !== 'webgpu') throw new TypeError('Invalid inference backend.');
   if (capability?.status !== 'ready') {
     throw new Error('WebGPU adapter unavailable. Check browser/driver setup or select CPU (slow) before loading Qwen.');
   }
+  if (capability.shaderF16) return {
+    device: 'webgpu', dtype: 'q4f16', model: 'onnx-community/Qwen3-0.6B-ONNX',
+    label: 'Qwen3-0.6B', reason: 'shader-f16 available',
+  };
   return {
-    device: 'webgpu',
-    dtype: capability.shaderF16 ? 'q4f16' : 'q4',
-    reason: capability.shaderF16 ? '16-bit shaders supported' : '16-bit shaders unavailable: use float32-compatible q4',
+    device: 'webgpu', dtype: 'q4', model: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    label: 'Qwen2.5-0.5B-Instruct',
+    reason: 'No shader-f16: use a different Qwen ONNX graph with documented WebGPU q4 support',
   };
 }
 
 export function modelFailureMessage(error) {
   const raw = String(error?.message || error);
   if (/requires f16|shader-f16|does not support fp16|device does not support f16/i.test(raw)) {
-    return 'This browser/GPU cannot execute a shader-f16 operation required by the selected model. Try reloading with CPU (slow), or update your browser and GPU drivers. Details: ' + raw;
+    return 'This model graph still requires shader-f16 even if its weights are marked q4. It cannot run on this WebGPU adapter. Select CPU / WebAssembly (slow), or use a supported browser/GPU. Details: ' + raw;
   }
   if (/out of memory|allocation failed|memory limit|OOM/i.test(raw)) {
     return 'Insufficient GPU/browser memory for this model. Close GPU-heavy tabs or try CPU mode (requires substantial RAM). Details: ' + raw;

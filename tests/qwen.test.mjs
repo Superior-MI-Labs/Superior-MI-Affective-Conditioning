@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildQwenMessages} from '../web/qwen-prompt.mjs';
 import {BrowserQwen} from '../web/qwen-client.mjs';
+import {probeGeneration} from '../web/qwen-probe.mjs';
 
 const input = {message: 'I got the job!', mode: 'phase', before: [0.2, 0.4, -0.3], observed: [0.9, 0.8, 0.1], after: [0.5, 0.6, -0.1], phase: 1.2, alignment: 0.75};
 test('Qwen prompt actually includes both controllable mood vectors and interaction mode', () => {
@@ -118,4 +119,21 @@ test('canceling generation terminates the worker and rejects outstanding request
   assert.equal(terminated,true);
   assert.equal(client.ready,false);
   assert.equal(client.pending.size,0);
+});
+
+test('Qwen2.5 prompt must not inherit the Qwen3 thinking control', () => {
+  const prompt = buildQwenMessages({...input, supportsThinking:false});
+  assert.equal(prompt.at(-1).content, input.message);
+});
+
+test('model is not verified until real token computation finishes', async () => {
+  const events = [];
+  const generator = async (messages, options) => {
+    events.push({messages, options});
+    return [{generated_text: [{role:'assistant',content:'Hi'}]}];
+  };
+  await probeGeneration(generator);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].options.max_new_tokens, 1);
+  await assert.rejects(probeGeneration(async () => {throw Error('Gather requires f16');}), /Gather requires f16/);
 });
