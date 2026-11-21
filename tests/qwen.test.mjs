@@ -45,3 +45,28 @@ test('worker failures surface instead of silently displaying templates', async (
   await assert.rejects(client.load(), /WebGPU unavailable/);
   assert.equal(client.ready, false);
 });
+
+test('inference backend changes require an explicit reload and preserve returned plan', async () => {
+  const handlers = new Map();
+  const requests = [];
+  const fake = {
+    addEventListener(type, callback) {handlers.set(type, callback);},
+    postMessage(data) {
+      requests.push(data);
+      const value = data.type === 'load'
+        ? {device:data.preference === 'cpu'?'wasm':'webgpu',dtype:data.preference === 'cpu'?'q4':'q4f16'}
+        : {status:'ready',shaderF16:true};
+      queueMicrotask(() => handlers.get('message')({data:{id:data.id,type:'result',value}}));
+    },
+  };
+  const client = new BrowserQwen({workerFactory:()=>fake});
+  assert.equal((await client.diagnose()).shaderF16,true);
+  await client.load('webgpu');
+  assert.equal(client.plan.dtype,'q4f16');
+  await client.load('webgpu');
+  assert.equal(requests.filter(x=>x.type==='load').length,1);
+  await client.load('cpu');
+  assert.equal(client.plan.device,'wasm');
+  assert.equal(client.preference,'cpu');
+  assert.equal(requests.filter(x=>x.type==='load').length,2);
+});

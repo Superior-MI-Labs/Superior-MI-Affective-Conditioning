@@ -1,6 +1,7 @@
 import {DEFAULTS, clamp, initialState, stepAffect, affectName, templateResponse} from './affect.mjs';
 import {buildQwenMessages} from './qwen-prompt.mjs';
 import {BrowserQwen} from './qwen-client.mjs';
+import {BROWSER_NAMES, browserFamily, browserGuidance} from './browser-support.mjs';
 
 const $ = (id) => document.getElementById(id);
 const copy = (a) => [...a];
@@ -18,11 +19,55 @@ const state = {
 };
 
 let qwen;
+const inferredBrowser = browserFamily(navigator.userAgent, Boolean(window.vivaldi));
+function ensureQwen() {
+  qwen ??= new BrowserQwen({onStatus: setModelStatus});
+  return qwen;
+}
+function renderBrowserGuide() {
+  const selected = $('browser-choice').value;
+  const family = selected === 'auto' ? inferredBrowser : selected;
+  const {steps, common} = browserGuidance(family);
+  const detected = BROWSER_NAMES[inferredBrowser];
+  $('browser-detected').textContent = `Detected: ${detected}. Some browsers (including Vivaldi) identify themselves as Chrome; select Vivaldi manually if needed.`;
+  const list = $('browser-steps');
+  list.replaceChildren();
+  for (const step of steps) {
+    const item = document.createElement('li');
+    item.textContent = step;
+    list.append(item);
+  }
+  $('browser-warning').textContent = common;
+}
+async function checkWebGPU() {
+  $('gpu-health').textContent = 'Checking GPU adapter…';
+  $('gpu-check').disabled = true;
+  try {
+    const capability = await ensureQwen().diagnose();
+    if (capability.status === 'ready') {
+      $('gpu-health').textContent = `WebGPU adapter available · shader-f16 ${capability.shaderF16 ? 'supported' : 'unavailable'}`;
+      $('gpu-recommendation').textContent = capability.shaderF16
+        ? 'WebGPU will load the q4f16 model, which uses half-precision shader operations.'
+        : 'WebGPU is available but shader-f16 is not. WebGPU will select the q4 model (float32-compatible activations); CPU mode remains available if inference still fails.';
+    } else {
+      $('gpu-health').textContent = `WebGPU unavailable (${capability.status})`;
+      $('gpu-recommendation').textContent = 'Use the browser setup guide below, or choose CPU / WebAssembly explicitly. CPU inference can be very slow and needs substantial RAM.';
+      $('browser-help').open = true;
+    }
+  } catch (error) {
+    $('gpu-health').textContent = 'Could not inspect WebGPU';
+    $('gpu-recommendation').textContent = `Check failed: ${error.message}. Use the browser guide or CPU mode.`;
+    $('browser-help').open = true;
+  } finally {
+    $('gpu-check').disabled = state.busy;
+  }
+}
 function setModelStatus(message) { $('model-status').textContent = message; }
 function setBusy(value) {
   state.busy = value;
-  for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'ai-d', 'msg-d']) $(id).disabled = value;
+  for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'model-backend', 'ai-d', 'msg-d']) $(id).disabled = value;
   $('message').disabled = value;
+  $('gpu-check').disabled = value;
   for (const prefix of ['ai', 'msg']) $(prefix + '-plot').setAttribute('aria-disabled', String(value));
 }
 
@@ -148,16 +193,18 @@ for (const engine of ['simulation', 'qwen']) {
     render();
   });
 }
+$('browser-choice').addEventListener('change', renderBrowserGuide);
+$('gpu-check').addEventListener('click', checkWebGPU);
 $('load-qwen').addEventListener('click', async () => {
   if (state.busy) return;
   setBusy(true);
   try {
-    qwen ??= new BrowserQwen({onStatus: setModelStatus});
-    await qwen.load();
+    const plan = await ensureQwen().load($('model-backend').value);
     state.engine = 'qwen';
-    setModelStatus('Qwen3-0.6B ready for browser inference.');
+    setModelStatus(`Qwen3-0.6B ready (${plan.device}, ${plan.dtype}).`);
   } catch (error) {
     setModelStatus(`Qwen load failed: ${error.message}`);
+    $('browser-help').open = true;
   } finally {
     setBusy(false);
     render();
@@ -184,8 +231,8 @@ $('chat-form').addEventListener('submit', async (event) => {
   if (state.busy) return;
   const message = $('message').value.trim();
   if (!message) return;
-  if (state.engine === 'qwen' && !qwen?.ready) {
-    setModelStatus('Click “Load Qwen” before using real model inference.');
+  if (state.engine === 'qwen' && (!qwen?.ready || qwen.preference !== $('model-backend').value)) {
+    setModelStatus('Load Qwen with the selected backend before running real inference.');
     return;
   }
   const before = {ai: copy(state.current.ai), phase: state.current.phase};
@@ -206,7 +253,7 @@ $('chat-form').addEventListener('submit', async (event) => {
         history: state.turns.filter((turn) => turn.engine === 'qwen'),
       });
       response = await qwen.generate(messages);
-      setModelStatus('Qwen3-0.6B ready for browser inference.');
+      setModelStatus(`Qwen3-0.6B ready (${qwen.plan.device}, ${qwen.plan.dtype}).`);
     } else {
       response = templateResponse(message, effective);
     }
@@ -237,6 +284,7 @@ $('chat-form').addEventListener('submit', async (event) => {
   } catch (error) {
     // Generation failure must not advance internal state or commit a training example.
     setModelStatus(`Generation failed: ${error.message}`);
+    $('browser-help').open = true;
   } finally {
     setBusy(false);
     render();
@@ -258,4 +306,6 @@ $('export-example').addEventListener('click', () => {
   });
   $('export-hint').textContent = 'Example exported. Review the values before adding it to a dataset.';
 });
+renderBrowserGuide();
 render();
+void checkWebGPU();

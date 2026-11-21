@@ -1,5 +1,4 @@
-// Browser-only model transport; the page owns affect state and the worker owns the model.
-// No hosted endpoint, API key, or duplicate dynamics implementation.
+// Browser-only transport. The worker owns the inference session; the page owns affect state.
 export class BrowserQwen {
   constructor({onStatus = () => {}, workerFactory = () => new Worker(new URL('./qwen-worker.mjs', import.meta.url), {type: 'module'})} = {}) {
     this.onStatus = onStatus;
@@ -7,6 +6,8 @@ export class BrowserQwen {
     this.pending = new Map();
     this.sequence = 0;
     this.ready = false;
+    this.preference = null;
+    this.plan = null;
     this.loading = null;
     this.worker.addEventListener('message', (event) => this.receive(event.data));
     this.worker.addEventListener('error', () => this.failAll('Browser model worker failed; reload the page to retry.'));
@@ -29,6 +30,8 @@ export class BrowserQwen {
     this.pending.clear();
     this.ready = false;
     this.loading = null;
+    this.preference = null;
+    this.plan = null;
     this.onStatus(message);
   }
 
@@ -40,10 +43,23 @@ export class BrowserQwen {
     });
   }
 
-  async load() {
-    if (this.ready) return;
+  diagnose() { return this.request('diagnose'); }
+
+  async load(preference = 'webgpu') {
+    if (this.ready && this.preference === preference) return this.plan;
     if (this.loading) return this.loading;
-    this.loading = this.request('load').then(() => {this.ready = true;}).finally(() => {this.loading = null;});
+    this.loading = this.request('load', {preference}).then((plan) => {
+      this.ready = true;
+      this.preference = preference;
+      this.plan = plan;
+      return plan;
+    }).catch((error) => {
+      // Never keep a stale ready flag when switching backends fails.
+      this.ready = false;
+      this.preference = null;
+      this.plan = null;
+      throw error;
+    }).finally(() => {this.loading = null;});
     return this.loading;
   }
 
