@@ -1,9 +1,10 @@
-name: Publish research demo
+name: Publish VAD neural workbench
 on:
   push:
     branches: [main]
     paths:
       - 'web/**'
+      - 'src/**'
       - 'tests/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -19,10 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Test browser dynamics
+      - name: Verify browser inference and exported neural weights
         run: node --test tests/*.test.mjs
-      - name: Test dataset contract
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Check Python syntax and lightweight tests
+        run: |
+          python -m compileall -q src
+          python -m unittest discover -s tests -p 'test_*.py' -v
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

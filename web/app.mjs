@@ -1,374 +1,182 @@
-import {DEFAULTS, clamp, initialState, stepAffect, affectName, templateResponse} from './affect.mjs';
-import {buildQwenMessages} from './qwen-prompt.mjs';
-import {BrowserQwen} from './qwen-client.mjs';
-import {LocalQwen} from './local-qwen.mjs';
-import {BROWSER_NAMES, browserFamily, browserGuidance, inspectWebGPU} from './browser-support.mjs';
+import {AXES, infer, checkModel, stateDelta} from './model.mjs';
 
-const $ = (id) => document.getElementById(id);
-const copy = (a) => [...a];
-const fmt = (n) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
-
+const $ = id => document.getElementById(id);
+const DEFAULT = Object.freeze({current:[0.2,0.4,-0.3], observed:[0.8,0.7,0.5]});
 const state = {
-  current: initialState(DEFAULTS.ai),
-  observed: copy(DEFAULTS.message),
-  mode: 'vector',
-  evolve: true,
-  turns: [],
-  recent: null,
-  engine: 'simulation',
-  busy: false,
+  current:[...DEFAULT.current], observed:[...DEFAULT.observed], target:[0,0,0],
+  touched: new Set(), examples:[], transitions:0, model:null, predicted:null,
 };
+const format = n => `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
 
-let qwen;
-const inferredBrowser = browserFamily(navigator.userAgent, Boolean(window.vivaldi));
-function ensureQwen() {
-  const local = $('model-backend').value === 'local';
-  if (qwen && (qwen instanceof LocalQwen) !== local) {
-    qwen.dispose();
-    qwen = undefined;
-  }
-  qwen ??= local
-    ? new LocalQwen({apiKey: () => $('local-api-key').value})
-    : new BrowserQwen({onStatus: setModelStatus});
-  return qwen;
-}
-function renderRuntimeChoice() {
-  const local = $('model-backend').value === 'local';
-  $('local-server-setup').hidden = !local;
-  $('load-qwen').textContent = local ? 'Connect local Qwen' : 'Load Qwen in browser';
-}
-function renderBrowserGuide() {
-  const selected = $('browser-choice').value;
-  const family = selected === 'auto' ? inferredBrowser : selected;
-  const {steps, common} = browserGuidance(family);
-  const detected = BROWSER_NAMES[inferredBrowser];
-  $('browser-detected').textContent = `Detected: ${detected}. Some browsers (including Vivaldi) identify themselves as Chrome; select Vivaldi manually if needed.`;
-  const list = $('browser-steps');
-  list.replaceChildren();
-  for (const step of steps) {
-    const item = document.createElement('li');
-    item.textContent = step;
-    list.append(item);
-  }
-  $('browser-warning').textContent = common;
-}
-async function checkWebGPU() {
-  $('gpu-health').textContent = 'Checking GPU adapter…';
-  $('gpu-check').disabled = true;
-  try {
-    const capability = await inspectWebGPU(navigator.gpu);
-    if (capability.status === 'ready') {
-      $('gpu-health').textContent = `WebGPU adapter available · shader-f16 ${capability.shaderF16 ? 'supported' : 'unavailable'}`;
-      $('gpu-recommendation').textContent = capability.shaderF16
-        ? 'Automatic mode selects Qwen3-0.6B q4f16 on WebGPU. A three-token probe checks both prefill and decode.'
-        : 'Your GPU does not expose shader-f16. Automatic mode selects Qwen2.5-0.5B-Instruct q4 on CPU / WebAssembly instead of retrying incompatible WebGPU shaders. Expect slower generation.';
-    } else {
-      $('gpu-health').textContent = `WebGPU unavailable (${capability.status})`;
-      $('gpu-recommendation').textContent = 'Automatic mode uses CPU / WebAssembly for this browser. It can be very slow and requires sufficient system RAM; the simulator remains available.';
-      $('browser-help').open = true;
+function makeSliders(kind) {
+  const host = $(`${kind}-controls`);
+  const values = kind === 'target' ? state.target : state[kind];
+  for (let i=0; i<3; i++) {
+    const item = document.createElement('div');
+    item.className = 'slider-row';
+    const label = document.createElement('label');
+    const name = document.createElement('span');
+    name.textContent = AXES[i];
+    const output = document.createElement('output');
+    output.id = `${kind}-${i}-output`;
+    output.textContent = format(values[i]);
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.id = `${kind}-${i}`;
+    slider.min = '-1';slider.max = '1';slider.step='any';
+    slider.value = String(values[i]);
+    slider.setAttribute('aria-label', `${kind} ${AXES[i]}`);
+    label.htmlFor = slider.id;
+    label.append(name, output);
+    const scale = document.createElement('div');
+    scale.className = 'scale';
+    for (const text of ['−1.0','0','+1.0']) {
+      const element = document.createElement('span');
+      element.textContent = text;
+      scale.append(element);
     }
-  } catch (error) {
-    $('gpu-health').textContent = 'Could not inspect WebGPU';
-    $('gpu-recommendation').textContent = `GPU check failed: ${error.message}. Automatic mode will attempt CPU / WebAssembly.`;
-    $('browser-help').open = true;
-  } finally {
-    $('gpu-check').disabled = state.busy;
+    item.append(label, slider, scale);
+    host.append(item);
+    slider.addEventListener('input', () => {
+      values[i] = Number(slider.value);
+      output.textContent = format(values[i]);
+      if (kind === 'target') state.touched.add(i);
+      else state.touched.clear(); // User must review the target again for changed inputs.
+      update();
+    });
   }
 }
-function setModelStatus(message) { $('model-status').textContent = message; }
-function setBusy(value) {
-  state.busy = value;
-  for (const id of ['submit-turn', 'reset', 'mode-vector', 'mode-phase', 'engine-simulation', 'engine-qwen', 'evolve', 'load-qwen', 'model-backend', 'local-api-key', 'ai-d', 'msg-d']) $(id).disabled = value;
-  $('message').disabled = value;
-  $('gpu-check').disabled = value;
-  $('cancel-qwen').hidden = !value || state.engine !== 'qwen';
-  for (const prefix of ['ai', 'msg']) $(prefix + '-plot').setAttribute('aria-disabled', String(value));
+
+function setSliders(kind, values) {
+  const vector = kind === 'target' ? state.target : state[kind];
+  for (let i=0;i<3;i++) {
+    vector[i] = values[i];
+    $(`${kind}-${i}`).value = String(values[i]);
+    $(`${kind}-${i}-output`).textContent = format(values[i]);
+  }
 }
 
-
-function render() {
-  for (const [prefix, value] of [['ai', state.current.ai], ['msg', state.observed]]) {
-    $(prefix + '-point').style.left = `${50 * (value[0] + 1)}%`;
-    $(prefix + '-point').style.top = `${50 * (1 - value[1])}%`;
-    $(prefix + '-v').textContent = fmt(value[0]);
-    $(prefix + '-a').textContent = fmt(value[1]);
-    $(prefix + '-d').value = String(value[2]);
-    $(prefix + '-d-value').textContent = fmt(value[2]);
-    $(prefix + '-name').textContent = affectName(value);
-  }
-  $('phase').textContent = fmt(state.current.phase);
-  $('turns').textContent = String(state.turns.length);
-  $('alignment').textContent = state.recent ? fmt(state.recent.alignment) : '—';
-  $('gain').textContent = state.recent ? state.recent.gain.toFixed(3) : '—';
-  for (const mode of ['vector', 'phase']) {
-    const selected = state.mode === mode;
-    $('mode-' + mode).classList.toggle('selected', selected);
-    $('mode-' + mode).setAttribute('aria-pressed', String(selected));
-  }
-  $('evolve').checked = state.evolve;
-  for (const engine of ['simulation', 'qwen']) {
-    const selected = state.engine === engine;
-    $('engine-' + engine).classList.toggle('selected', selected);
-    $('engine-' + engine).setAttribute('aria-pressed', String(selected));
-  }
-  $('model-hint').textContent = state.engine === 'qwen'
-    ? `Real ${(qwen?.plan?.label ?? 'Qwen')} output using text-based affect prompts. No trained affective LoRA yet.`
-    : 'Deterministic example replies; no neural model runs in this mode.';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgNode(parent, tag, attributes={}, text='') {
+  const element=document.createElementNS(SVG_NS,tag);
+  for (const [key,value] of Object.entries(attributes)) element.setAttribute(key,String(value));
+  if (text) element.textContent=text;
+  parent.append(element);
+  return element;
 }
-
-function setVectorPoint(prefix, v, a) {
-  if (state.busy) return;
-  const target = prefix === 'ai' ? state.current.ai : state.observed;
-  target[0] = clamp(v);
-  target[1] = clamp(a);
-  if (prefix === 'ai') state.current.phase = Math.atan2(target[1], target[0]);
-  state.recent = null;
-  render();
-}
-
-function makePlotInteractive(prefix) {
-  const plot = $(prefix + '-plot');
-  const updateFromPointer = (event) => {
-    if (state.busy) return;
-    const rect = plot.getBoundingClientRect();
-    setVectorPoint(prefix,
-      2 * (event.clientX - rect.left) / rect.width - 1,
-      1 - 2 * (event.clientY - rect.top) / rect.height);
+function project([v,a,d]) {return [320+128*v-64*a-42*d,205+10*v-70*a+78*d];}
+function renderSpace() {
+  const svg=$('vad-space');
+  svg.replaceChildren();
+  const corners=[];
+  for(const v of [-1,1])for(const a of [-1,1])for(const d of [-1,1])corners.push([v,a,d]);
+  for (const from of corners) for (const axis of [0,1,2]) {
+    if (from[axis]===1) continue;
+    const to=[...from];to[axis]=1;
+    const [x1,y1]=project(from),[x2,y2]=project(to);
+    svgNode(svg,'line',{x1,y1,x2,y2,stroke:'#496178','stroke-width':1,'stroke-opacity':.55});
+  }
+  for(const [index,label,color] of [[0,'VALENCE','#63d8cf'],[1,'AROUSAL','#b0cada'],[2,'DOMINANCE','#d2adef']]) {
+    const start=[0,0,0],end=[0,0,0];start[index]=-1;end[index]=1;
+    const [x1,y1]=project(start),[x2,y2]=project(end);
+    svgNode(svg,'line',{x1,y1,x2,y2,stroke:color,'stroke-width':1.5,'stroke-opacity':.72});
+    svgNode(svg,'text',{x:x2+(index===0?14:index===1?-18:10),y:y2+(index===0?6:index===1?-12:17),fill:color,'font-size':12,'font-weight':700,'text-anchor':index===1?'end':'start'},label);
+    svgNode(svg,'text',{x:x1-7,y:y1+7,fill:'#698096','font-size':11},'−');
+  }
+  const current=project(state.current),observed=project(state.observed);
+  const predicted=state.predicted?project(state.predicted):null;
+  const drawLine=(a,b,stroke,dash='')=>svgNode(svg,'line',{'x1':a[0],'y1':a[1],'x2':b[0],'y2':b[1],stroke,'stroke-width':2,'stroke-dasharray':dash,'stroke-opacity':.75});
+  drawLine(current,observed,'#a8b0bd','5 7');
+  if(predicted) drawLine(current,predicted,'#b8a0fe');
+  const addPoint=(point,color)=>{
+    svgNode(svg,'circle',{cx:point[0],cy:point[1],r:16,fill:color,'fill-opacity':.08});
+    svgNode(svg,'circle',{cx:point[0],cy:point[1],r:6.5,fill:color,stroke:'#0d1a25','stroke-width':2});
   };
-  plot.addEventListener('pointerdown', (event) => {
-    if (state.busy || event.button !== 0) return;
-    plot.setPointerCapture(event.pointerId);
-    updateFromPointer(event);
-  });
-  plot.addEventListener('pointermove', (event) => {
-    if (plot.hasPointerCapture(event.pointerId)) updateFromPointer(event);
-  });
-  plot.addEventListener('keydown', (event) => {
-    if (state.busy) return;
-    const vector = prefix === 'ai' ? state.current.ai : state.observed;
-    const increments = {ArrowLeft:[-0.05,0],ArrowRight:[0.05,0],ArrowUp:[0,0.05],ArrowDown:[0,-0.05]};
-    const increment = increments[event.key];
-    if (!increment) return;
-    event.preventDefault();
-    setVectorPoint(prefix, vector[0] + increment[0], vector[1] + increment[1]);
-  });
+  addPoint(observed,'#ebb16f');
+  addPoint(current,'#55d3ca');
+  if(predicted) addPoint(predicted,'#b8a0fe');
 }
 
-function appendBubble(role, content, label) {
-  const list = $('conversation');
-  const empty = list.querySelector('.empty');
-  if (empty) empty.remove();
-  const node = document.createElement('div');
-  node.className = `bubble ${role}`;
-  const caption = document.createElement('small');
-  caption.textContent = label;
-  const text = document.createElement('div');
-  text.textContent = content;
-  node.append(caption, text);
-  list.append(node);
-  list.scrollTop = list.scrollHeight;
-  return text;
+function renderDeltas() {
+  const host=$('delta-bars');host.replaceChildren();
+  for(let i=0;i<3;i++) {
+    const value=state.predicted[i]-state.current[i];
+    const row=document.createElement('div');row.className='delta-row';
+    const axis=document.createElement('span');axis.textContent=AXES[i];
+    const track=document.createElement('div');track.className='delta-track';
+    const zero=document.createElement('div');zero.className='delta-zero';
+    const fill=document.createElement('div');fill.className='delta-fill';
+    const pixels=Math.min(50,Math.abs(value)*25); // delta is bounded by [-2,+2]
+    fill.style.left = `${value>=0?50:50-pixels}%`;
+    fill.style.width=`${pixels}%`;
+    fill.style.background=value>=0?'#55d3ca':'#ebb16f';
+    track.append(zero,fill);
+    const number=document.createElement('span');number.className='delta-value';number.textContent=format(value);
+    row.append(axis,track,number);host.append(row);
+  }
+}
+function update() {
+  if (state.model) {
+    state.predicted=infer(state.model,state.current,state.observed);
+    $('next-vector').textContent=`[${state.predicted.map(format).join(', ')}]`;
+    $('delta-vector').textContent=`[${stateDelta(state.predicted,state.current).map(format).join(', ')}]`;
+    renderDeltas();
+  }
+  renderSpace();
+  $('advance').disabled = !state.predicted;
+  $('add-example').disabled = state.touched.size !== 3;
+  $('export-data').disabled = state.examples.length === 0;
+  $('example-count').textContent = `${state.examples.length} reviewed example${state.examples.length===1?'':'s'} in this session`;
+  $('transition-count').textContent = `${state.transitions} transition${state.transitions===1?'':'s'} applied`;
 }
 
-function downloadJSON(name, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2) + '\n'], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+function download(name,text,type) {
+  const url=URL.createObjectURL(new Blob([text],{type}));
+  const a=document.createElement('a');a.href=url;a.download=name;
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
-for (const prefix of ['ai', 'msg']) {
-  makePlotInteractive(prefix);
-  $(prefix + '-d').addEventListener('input', (event) => {
-    if (state.busy) return;
-    const target = prefix === 'ai' ? state.current.ai : state.observed;
-    target[2] = Number(event.target.value);
-    state.recent = null;
-    render();
-  });
+for(const kind of ['current','observed','target'])makeSliders(kind);
+$('reset').addEventListener('click',()=>{
+  setSliders('current',DEFAULT.current);
+  setSliders('observed',DEFAULT.observed);
+  state.transitions=0;state.touched.clear();update();
+});
+$('advance').addEventListener('click',()=>{
+  if(!state.predicted)return;
+  setSliders('current',state.predicted);
+  state.transitions++;
+  state.touched.clear();update();
+});
+$('add-example').addEventListener('click',()=>{
+  if(state.touched.size!==3)return;
+  state.examples.push({source:'human_reviewed',current:[...state.current],observed:[...state.observed],next:[...state.target]});
+  state.touched.clear();
+  $('dataset-status').textContent='Saved in memory. Export the JSONL before closing this page.';
+  update();
+});
+$('export-data').addEventListener('click',()=>{
+  if(!state.examples.length)return;
+  download('vad-reviewed.jsonl',state.examples.map(x=>JSON.stringify(x)).join('\n')+'\n','application/x-ndjson');
+});
+
+try {
+  const response=await fetch('./model.json',{cache:'no-store'});
+  if(!response.ok)throw new Error(`HTTP ${response.status}`);
+  const model=checkModel(await response.json());
+  const expected=model.probe?.output;
+  const actual=infer(model,model.probe?.input?.slice(0,3),model.probe?.input?.slice(3));
+  if(!Array.isArray(expected)||expected.length!==3||actual.some((n,i)=>Math.abs(n-expected[i])>1e-5)){
+    throw new Error('Exported weights disagree with the PyTorch reference output.');
+  }
+  state.model=model;
+  $('model-status').textContent=`6 → 16 → 3 · ${model.source==='synthetic_toy'?'synthetic weights':'reviewed data'}`;
+  $('source-note').textContent=`Training source: ${model.source==='synthetic_toy'?'artificial rule':'human reviewed'}`;
+  $('metric-mse').textContent=model.metrics.test_mse.toFixed(5);
+  $('metric-baseline').textContent=model.metrics.copy_state_baseline_mse.toFixed(5);
+  $('metric-count').textContent=String(model.metrics.train_examples);
+} catch(error) {
+  $('model-status').textContent=`Model unavailable: ${error.message}`;
 }
-for (const mode of ['vector', 'phase']) {
-  $('mode-' + mode).addEventListener('click', () => {
-    if (state.busy) return;
-    state.mode = mode;
-    state.recent = null;
-    render();
-  });
-}
-$('evolve').addEventListener('change', (event) => {state.evolve = event.target.checked;render();});
-for (const engine of ['simulation', 'qwen']) {
-  $('engine-' + engine).addEventListener('click', () => {
-    if (state.busy) return;
-    state.engine = engine;
-    render();
-  });
-}
-$('browser-choice').addEventListener('change', renderBrowserGuide);
-$('model-backend').addEventListener('change', renderRuntimeChoice);
-$('gpu-check').addEventListener('click', checkWebGPU);
-$('cancel-qwen').addEventListener('click', () => {
-  if (!state.busy || state.engine !== 'qwen' || !qwen) return;
-  qwen.dispose();
-  qwen = undefined;
-});
-$('load-qwen').addEventListener('click', async () => {
-  if (state.busy) return;
-  setBusy(true);
-  try {
-    const backend = $('model-backend').value;
-    const plan = await ensureQwen().load(backend);
-    state.engine = 'qwen';
-    setModelStatus(`${plan.label} ${plan.device === 'local' ? 'connected' : 'verified'} (${plan.device}, ${plan.dtype}). ${plan.reason}.`);
-  } catch (error) {
-    setModelStatus(`Qwen load failed: ${error.message}`);
-    $('browser-help').open = true;
-  } finally {
-    setBusy(false);
-    render();
-  }
-});
-$('reset').addEventListener('click', () => {
-  state.current = initialState(DEFAULTS.ai);
-  state.observed = copy(DEFAULTS.message);
-  state.mode = 'vector';
-  state.evolve = true;
-  state.turns = [];
-  state.recent = null;
-  $('conversation').replaceChildren();
-  const empty = document.createElement('div');
-  empty.className = 'empty';
-  empty.textContent = 'Enter a message and submit a turn to observe the selected dynamics model.';
-  $('conversation').append(empty);
-  $('target-response').value = '';
-  $('export-hint').textContent = 'Run an interaction before exporting an example.';
-  render();
-});
-$('chat-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  if (state.busy) return;
-  const message = $('message').value.trim();
-  if (!message) return;
-  if (state.engine === 'qwen' && (!qwen?.ready || qwen.preference !== $('model-backend').value)) {
-    setModelStatus('Load Qwen with the selected backend before running real inference.');
-    return;
-  }
-  const before = {ai: copy(state.current.ai), phase: state.current.phase};
-  const observed = copy(state.observed);
-  const mode = state.mode;
-  const evolve = state.evolve;
-  const result = stepAffect(before, observed, {mode});
-  const effective = evolve ? result.ai : before.ai;
-  const effectivePhase = evolve ? result.phase : before.phase;
-  setBusy(true);
-  let outputNode;
-  let visibleText = '';
-  let tokenCount = 0;
-  let streamChunks = 0;
-  let began = 0;
-  let statusTimer;
-  try {
-    let response;
-    if (state.engine === 'qwen') {
-      began = performance.now();
-      appendBubble('user', message, `MESSAGE · ${mode}`);
-      outputNode = appendBubble('sim', 'Preparing prompt…', `${qwen.plan.label.toUpperCase()} · GENERATING`);
-      setModelStatus(`Qwen preparing prompt (${qwen.plan.device}); first token may take time…`);
-      statusTimer = setInterval(() => {
-        const seconds = Math.floor((performance.now() - began) / 1000);
-        const count = qwen.plan.device === 'local' ? streamChunks : tokenCount;
-        const unit = qwen.plan.device === 'local' ? 'text chunks' : 'tokens';
-        setModelStatus(count
-          ? `Generating: ${count} ${unit} · ${seconds}s elapsed`
-          : `Waiting for first output · ${seconds}s elapsed${seconds >= 30 ? ' · Use Stop generation if needed.' : ''}`);
-      }, 1000);
-      const messages = buildQwenMessages({
-        message, mode, before: before.ai, observed, after: effective,
-        phase: effectivePhase, alignment: result.alignment,
-        history: state.turns.filter((turn) => turn.engine === 'qwen' && turn.model_id === qwen.plan.model),
-        supportsThinking: qwen.plan.model.includes('Qwen3-'),
-      });
-      response = await qwen.generate(messages, ({delta, tokens, chunks}) => {
-        if (typeof tokens === 'number') tokenCount = tokens;
-        if (typeof chunks === 'number') streamChunks = chunks;
-        if (delta) {
-          visibleText += delta;
-          outputNode.textContent = visibleText;
-          $('conversation').scrollTop = $('conversation').scrollHeight;
-        }
-        const elapsed = ((performance.now() - began) / 1000).toFixed(0);
-        setModelStatus(`Generating: ${qwen.plan.device === 'local' ? streamChunks + ' text chunks' : tokenCount + ' tokens'} · ${elapsed}s elapsed`);
-      });
-      outputNode.textContent = response;
-      setModelStatus(`${qwen.plan.label} ready (${qwen.plan.device}, ${qwen.plan.dtype}); ${qwen.plan.device === 'local' ? streamChunks + ' streamed chunks' : tokenCount + ' generated tokens'}.`);
-    } else {
-      response = templateResponse(message, effective);
-    }
-    const turn = {
-      schema_version: 1,
-      mode,
-      engine: state.engine,
-      user: message,
-      initial_ai_vad: before.ai,
-      observed_vad: observed,
-      state_after_vad: copy(effective),
-      phase_before: before.phase,
-      phase_after: effectivePhase,
-      evolve,
-      alignment: result.alignment,
-      assistant: response,
-      ...(state.engine === 'qwen' ? {model_id: qwen.plan.model, device: qwen.plan.device, dtype: qwen.plan.dtype} : {}),
-    };
-    state.turns.push(turn);
-    state.recent = result;
-    if (evolve) state.current = {ai: result.ai, phase: result.phase};
-    if (!outputNode) {
-      appendBubble('user', message, `MESSAGE · ${mode}`);
-      appendBubble('sim', response, 'DETERMINISTIC TEMPLATE · NOT MODEL OUTPUT');
-    } else {
-      outputNode.parentElement.querySelector('small').textContent =
-        `${qwen.plan.label.toUpperCase()} · REAL MODEL / TEXT PROMPT CONDITIONING`;
-    }
-    $('message').value = '';
-    $('target-response').value = '';
-    $('export-hint').textContent = 'Enter a human-approved target response to export a training example.';
-  } catch (error) {
-    // Generation failure must not advance internal state or commit a training example.
-    if (outputNode) {
-      outputNode.textContent = visibleText
-        ? `${visibleText}\n\n[Incomplete response: ${error.message}]`
-        : `[No response: ${error.message}]`;
-      outputNode.parentElement.querySelector('small').textContent = 'QWEN · INCOMPLETE / NOT SAVED';
-    }
-    setModelStatus(`Generation ${/canceled/i.test(error.message) ? 'canceled' : 'failed'}: ${error.message}`);
-    if (!/canceled|stopped/i.test(error.message) && $('model-backend').value !== 'local') $('browser-help').open = true;
-  } finally {
-    if (statusTimer) clearInterval(statusTimer);
-    setBusy(false);
-    render();
-  }
-});
-$('export-trace').addEventListener('click', () => downloadJSON('affective-trace.json', {
-  schema_version: 1, kind: 'simulation_trace', data: state.turns,
-}));
-$('export-example').addEventListener('click', () => {
-  const turn = state.turns.at(-1);
-  const target = $('target-response').value.trim();
-  if (!turn || !target) {
-    $('export-hint').textContent = 'An interaction and an authored target response are required.';
-    return;
-  }
-  const {assistant, engine, alignment, model_id, device, dtype, ...record} = turn;
-  downloadJSON('affective-approved-example.json', {...record,
-    assistant: target, provenance: 'human-authored', approved: true,
-  });
-  $('export-hint').textContent = 'Example exported. Review the values before adding it to a dataset.';
-});
-renderBrowserGuide();
-renderRuntimeChoice();
-render();
-void checkWebGPU();
+update();

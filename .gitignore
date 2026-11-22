@@ -2,8 +2,5 @@ __pycache__/
 *.py[cod]
 .venv/
 runs/
-*.safetensors
-*.gguf
 *.pt
-*.bin
 .DS_Store
