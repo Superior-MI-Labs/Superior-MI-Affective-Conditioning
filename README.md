@@ -8,6 +8,14 @@ A small, falsifiable experiment: can a language model learn to use a continuous 
 
 **Current evidence boundary:** The site offers deterministic simulation and real Qwen generation through either an opt-in local GGUF model service or browser ONNX inference on compatible hardware, **conditioned through ordinary text prompts**. Prompt conditioning is not the trainable affective soft-prefix/LoRA experiment. The Python research path contains that experimental training design, but **no trained affective checkpoint or empirical empathy result is published yet**.
 
+## VAD-only scratch neural experiment
+
+The new, independent **6 → 16 → 3** PyTorch network learns a numerical VAD
+transition from scratch. No Qwen weights, prompt conditioning, or mode selector
+are used. Its first dataset is deliberately synthetic and demonstrates only
+that the training process runs; it is **not evidence of empathy**.
+See [run instructions and reviewed-data schema](docs/VAD_TRANSITION.md).
+
 ## What exists
 
 - Two clickable, keyboard-accessible valence/arousal planes, with dominance sliders.
