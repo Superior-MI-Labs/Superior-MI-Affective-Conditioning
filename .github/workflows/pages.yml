@@ -29,6 +29,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Validate relational-learning comparison data
         run: |
+          python3 experiments/relational-learning/tools/generate_challenges.py --check
           python3 experiments/relational-learning/tools/validate.py experiments/relational-learning/data/*.jsonl
           python3 -m unittest discover -s experiments/relational-learning/tests -p 'test_*.py' -v
           node --check web/relational/review.mjs

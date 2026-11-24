@@ -20,7 +20,7 @@
     </header>
     <main>
       <section class="hero">
-        <div class="eyebrow"><span class="dot"></span> EXPERIMENT 002 <span class="slash">/</span> RESEARCH DESIGN v0.1</div>
+        <div class="eyebrow"><span class="dot"></span> EXPERIMENT 002 <span class="slash">/</span> RESEARCH DESIGN v0.2</div>
         <h1>Can relational behavior<br><em>be learned into the model?</em></h1>
         <p class="lead">We're testing whether a language model can learn to respond differently to the <strong>same words</strong> based on the circumstances, without emotion instructions at inference.</p>
         <div class="status"><strong>Current status: design and synthetic dataset</strong><span>No relationally fine-tuned model has been trained or evaluated yet. There are no human-reviewed preference pairs yet; volunteers can try the blind review workflow. The examples demonstrate a test design, not emergent empathy or machine emotions.</span></div>
@@ -64,14 +64,16 @@
         <p class="aside">Training uses a frozen reference model and a trainable copy of the same checkpoint. At inference, no VAD input, internal mood state or special empathy prompt is added. DPO is an established method; our experimental question is whether these counterfactual data improve relational generalization.</p>
       </section>
       <section class="section" aria-labelledby="dataset-heading">
-        <div class="section-head"><span class="section-num">03 / DATASET</span><h2 id="dataset-heading">A small seed, not a benchmark.</h2></div>
+        <div class="section-head"><span class="section-num">03 / DATASET</span><h2 id="dataset-heading">Seed + harder counterfactual challenges. Still not a benchmark.</h2></div>
         <div class="metrics">
-          <div><strong>36</strong><span>Synthetic preference pairs</span></div>
-          <div><strong>18</strong><span>Scenario families</span></div>
+          <div><strong>76</strong><span>Synthetic preference pairs</span></div>
+          <div><strong>38</strong><span>Scenario families</span></div>
           <div><strong>0</strong><span>Human-reviewed examples</span></div>
           <div><strong>0</strong><span>Models trained</span></div>
         </div>
         <div class="resources">
+          <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/CHALLENGES.md"><span>New challenge batch</span><small>20 families · context-driven preference reversals</small></a>
+          <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/SCALING.md"><span>Scaling to larger LLMs</span><small>Stable data format, separate model checkpoints</small></a>
           <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/DATASET.md"><span>Dataset design</span><small>Context contrasts, annotation, holdout rules</small></a>
           <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/EVALUATION.md"><span>Evaluation plan</span><small>Blind comparisons, counterfactual tests, failure modes</small></a>
           <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/tree/main/experiments/relational-learning/data"><span>Example records</span><small>Train / development / test fixtures, unreviewed</small></a>

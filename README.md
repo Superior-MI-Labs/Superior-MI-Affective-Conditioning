@@ -8,18 +8,19 @@ Our current hypothesis is that a language model can learn **context-sensitive re
 
 The starting design uses *counterfactual response preference pairs*: the same final message appears under different preceding circumstances, with the preferred response reversed. We propose evaluating a fine-tuned language model against the unchanged base checkpoint using novel situation families, factuality tests and blind human assessments.
 
-**Research status:** Experiment design and 36 synthetic, **unreviewed** examples across 18 scenario families. **No relational language model has yet been trained or evaluated.** The seed files are smoke-test fixtures, not validated preference judgments. Improved social responses, if observed later, would not establish felt emotions, subjective empathy or consciousness.
+**Research status:** Experiment design and 76 synthetic, **unreviewed** comparisons across 38 scenario families, including 40 new context-sensitive challenge records. **No relational language model has yet been trained or evaluated.** The seed files are smoke-test fixtures, not validated preference judgments. Improved social responses, if observed later, would not establish felt emotions, subjective empathy or consciousness.
 
 ### Reproduce the data checks
 
 ```bash
+python3 experiments/relational-learning/tools/generate_challenges.py --check
 python3 experiments/relational-learning/tools/validate.py experiments/relational-learning/data/*.jsonl
 python3 -m unittest discover -s experiments/relational-learning/tests -p 'test_*.py' -v
 ```
 
-Read the [research hypothesis and DPO objective](experiments/relational-learning/OBJECTIVE.md), [dataset protocol](experiments/relational-learning/DATASET.md), [evaluation plan](experiments/relational-learning/EVALUATION.md), and [two-rater review guide](experiments/relational-learning/REVIEW.md). The browser review tool runs locally and does not upload ratings. A compiler requires two independent agreeing judgments per variant, rejects disputes and incomplete families, and forbids exporting the test split for training. No examples have been human reviewed yet.
+Read the [scaling plan](experiments/relational-learning/SCALING.md), [new challenge batch](experiments/relational-learning/CHALLENGES.md), [research hypothesis and DPO objective](experiments/relational-learning/OBJECTIVE.md), [dataset protocol](experiments/relational-learning/DATASET.md), [evaluation plan](experiments/relational-learning/EVALUATION.md), and [two-rater review guide](experiments/relational-learning/REVIEW.md). The browser review tool runs locally and does not upload ratings. A compiler requires two independent agreeing judgments per variant, rejects disputes and incomplete families, and forbids exporting the test split for training. No examples have been human reviewed yet.
 
-The next milestone is **independent human review of the preference pairs**, then choosing a small base checkpoint and running a controlled pilot. We deliberately are not building a separate mood-state system or custom AI framework for this experiment.
+The next milestone is **independent human review of the preference pairs**, then converting only approved records to standard conversational DPO data using `tools/export_dpo.py`, selecting a small base checkpoint and running a controlled pilot. The same reviewed data format can support larger LLMs, but an improvement at small scale does not guarantee an improvement at large scale. We deliberately are not building a separate mood-state system or custom AI framework for this experiment.
 
 ---
 

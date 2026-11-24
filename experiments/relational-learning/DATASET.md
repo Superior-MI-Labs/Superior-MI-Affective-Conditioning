@@ -1,4 +1,4 @@
-# Experimental dataset v0.1
+# Experimental dataset v0.2
 
 ## Unit of supervision
 
@@ -27,6 +27,12 @@ The chosen response is not necessarily kind or enthusiastic. It can be a direct 
 4. Check factual correctness, overconfidence, unwanted advice, pressure, fabricated continuity, and length/style confounds.
 5. Record provenance, language, license/consent, safety category where necessary, and exclusion reasons. No real names, contact information, or confidential chat histories in the public corpus.
 6. Freeze and hash an evaluation split before training. Human reviewers used for final test scoring should be blind to checkpoint identity.
+
+## Additional challenge batch (v0.2)
+
+The 20-family challenge batch is maintained as a small, hand-authored JSON source and deterministically compiled to `data/*_challenge.jsonl`. It adds 40 new unreviewed comparisons, emphasizing plausible alternatives, agency, uncertainty and contextual calibration. See [CHALLENGES.md](CHALLENGES.md). Existing seeds are untouched. The combined **76 synthetic** rows are **not** ready for DPO training.
+
+The same `review.py` compiler handles either training batch; use `tools/export_dpo.py` only after two independent agreeing judgments on complete families. Data format and model size are separate decisions; see [SCALING.md](SCALING.md).
 
 ## Pilot sizing (proposed, not power-calculated)
 

@@ -29,3 +29,10 @@ One finetuned language model using DPO on reviewed, context-dependent preference
 - Replicate on fresh families and repeated seeds before claiming a reproducible finding.
 
 There is no claimed statistical guarantee from the small pilot. Set formal effect-size/power thresholds after annotation agreement and baseline variance are measured, not post hoc.
+
+
+## v0.2 cross-scale design
+
+The same reviewed training data can be re-used for separate small-, medium-, and large-model DPO runs. Each model has an **independent unchanged checkpoint** and identical held-out assessment cases; a small-model effect must not be treated as evidence of a large-model effect. See [SCALING.md](SCALING.md).
+
+The three public test challenge families and original test seed are illustrative only. Their publication means they are **not a defensible hidden benchmark**, and they should never be used to claim generalization. A future independent withheld test is required before a scientific claim.

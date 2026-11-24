@@ -51,3 +51,10 @@ The compiler refuses to overwrite existing source, task, rating, or output files
 - Reviewers should not upload real private conversations, identifying details, or sensitive personal information into the public project.
 - Output and rating files are excluded by `.gitignore` under `reviews/` and must not be published without explicit consent and provenance checks.
 - **The project currently has zero independently reviewed pairs and zero trained relational models.** This tool only establishes a way to collect evidence honestly.
+
+
+## v0.2 separate challenge batch
+
+The additional 28 train-split challenge tasks are available at `web/relational/challenge_tasks.jsonl`, also downloadable from the review page. Review them as a **distinct batch** from the original 24 seed tasks so original task IDs/hashes remain stable. Use identical `review.py prepare` / `review.py compile` commands with `--data data/train_challenge.jsonl` and distinct private output filenames. Never merge ratings or pass evaluation examples into the training compiler.
+
+After compilation, run `tools/export_dpo.py` on the reviewed train split to produce the conventional `prompt` / `chosen` / `rejected` format supported by TRL. This exporter does not train, and it is intentionally impossible to export the author-drafted synthetic inputs directly.
