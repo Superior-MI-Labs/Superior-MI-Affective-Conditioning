@@ -1,0 +1,16 @@
+{
+  "project": "Superior MI Labs Relational Learning",
+  "version": "0.1",
+  "record_counts": {
+    "train": 24,
+    "dev": 6,
+    "test": 6
+  },
+  "family_counts": {
+    "train": 12,
+    "dev": 3,
+    "test": 3
+  },
+  "review_status": "synthetic_unreviewed",
+  "usage": "prototype_only"
+}

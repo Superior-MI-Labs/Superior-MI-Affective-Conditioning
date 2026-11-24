@@ -1,0 +1,13 @@
+flowchart TD
+  D[Scenario families] --> S[Family-level split]
+  S --> H[Independent human review]
+  H --> P[Context plus preferred and rejected response]
+  P --> F[Frozen pretrained reference LM]
+  P --> T[Trainable copy of same LM]
+  F --> L[DPO pairwise preference loss]
+  T --> L
+  L --> T
+  T --> E[Held-out counterfactual evaluation]
+  E --> Q{Relational gains without factual regression?}
+  Q -- Yes --> N[Replicate across new seeds and families]
+  Q -- No --> R[Revise data or falsify hypothesis]
