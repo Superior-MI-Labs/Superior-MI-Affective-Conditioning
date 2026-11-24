@@ -13,6 +13,9 @@ This is a study of **learned relational behavior**. It is not evidence of subjec
 ## Folder contents
 
 - `OBJECTIVE.md`: operational hypothesis, learning objective, implementation decisions.
+- [`REVIEW.md`](REVIEW.md): blinded two-rater annotation protocol, CLI, data provenance and approval gates.
+- `tools/review.py`: offline task preparation and conservative reviewed-data export.
+- `web/relational/review.html`: optional browser-only labeling interface; task pack generated from training seed.
 - `DATASET.md`: scenario protocol, annotation, leakage controls, scaling plan.
 - `EVALUATION.md`: preregisterable evaluation criteria and failure conditions.
 - `schema.json`: version 1.0 structural schema for one preference pair.
@@ -36,4 +39,4 @@ python3 -m unittest discover -s tests -v
 4. Do not collect real conversations without participant permission, privacy safeguards, and appropriate use rights.
 5. Do not publish claims of intrinsic emotions or empathy from preference-training alone.
 
-**Next implementation milestone:** Human-review a small scenario pilot, select a trainable pretrained base checkpoint, record an immutable baseline, then run one standard DPO training job with held-out counterfactual tests.
+**Next implementation milestone:** Collect independent human judgments through the [blind review pilot](REVIEW.md). The model training stage remains blocked until comparisons have been reviewed and an uncontaminated evaluation set has been frozen. Then select a pretrained base checkpoint and run one controlled DPO pilot.

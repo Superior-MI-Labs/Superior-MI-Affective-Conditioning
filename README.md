@@ -1,6 +1,6 @@
 # Superior MI Labs — Experimental AI Research
 
-**[Open the Relational Learning research page](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/relational/)** · [Experiment files](https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/tree/main/experiments/relational-learning) · [Earlier VAD numerical workbench](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/)
+**[Open the Relational Learning research page](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/relational/)** · [Experiment files](https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/tree/main/experiments/relational-learning) · [Blind review pilot](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/relational/review.html) · [Earlier VAD numerical workbench](https://superior-mi-labs.github.io/Superior-MI-Affective-Conditioning/)
 
 ## Active direction: Experiment 002 — Relational Learning
 
@@ -17,7 +17,7 @@ python3 experiments/relational-learning/tools/validate.py experiments/relational
 python3 -m unittest discover -s experiments/relational-learning/tests -p 'test_*.py' -v
 ```
 
-Read the [research hypothesis and DPO objective](experiments/relational-learning/OBJECTIVE.md), [dataset protocol](experiments/relational-learning/DATASET.md), and [evaluation plan](experiments/relational-learning/EVALUATION.md).
+Read the [research hypothesis and DPO objective](experiments/relational-learning/OBJECTIVE.md), [dataset protocol](experiments/relational-learning/DATASET.md), [evaluation plan](experiments/relational-learning/EVALUATION.md), and [two-rater review guide](experiments/relational-learning/REVIEW.md). The browser review tool runs locally and does not upload ratings. A compiler requires two independent agreeing judgments per variant, rejects disputes and incomplete families, and forbids exporting the test split for training. No examples have been human reviewed yet.
 
 The next milestone is **independent human review of the preference pairs**, then choosing a small base checkpoint and running a controlled pilot. We deliberately are not building a separate mood-state system or custom AI framework for this experiment.
 
