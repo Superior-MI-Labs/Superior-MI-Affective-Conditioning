@@ -1,6 +1,6 @@
 {
   "project": "Superior MI Labs Relational Learning",
-  "version": "0.2",
+  "version": "0.3",
   "record_counts": {
     "train": 24,
     "dev": 6,
@@ -14,23 +14,30 @@
   "review_status": "synthetic_unreviewed",
   "usage": "candidate_review_only",
   "challenge_record_counts": {
-    "train": 28,
-    "dev": 6,
-    "test": 6
+    "train": 44,
+    "dev": 10,
+    "test": 10
   },
   "challenge_family_counts": {
-    "train": 14,
-    "dev": 3,
-    "test": 3
+    "train": 22,
+    "dev": 5,
+    "test": 5
   },
   "total_record_counts": {
-    "train": 52,
-    "dev": 12,
-    "test": 12
+    "train": 68,
+    "dev": 16,
+    "test": 16
   },
   "total_family_counts": {
-    "train": 26,
-    "dev": 6,
-    "test": 6
+    "train": 34,
+    "dev": 8,
+    "test": 8
+  },
+  "synthetic_poc": {
+    "status": "code_and_data_ready_not_trained",
+    "label_origin": "author_synthetic_unreviewed",
+    "human_review": "optional_external_validity_path",
+    "training_scope": "train_only",
+    "test_scope": "public_synthetic_not_hidden"
   }
 }

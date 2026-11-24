@@ -1,6 +1,6 @@
-# Challenge batch v0.2 — counterfactual social understanding
+# Challenge batch v0.3 — counterfactual social understanding
 
-This is a **new batch of author-drafted questions**, not observed human preferences. It adds 20 families (40 comparisons) to the original 18-family seed. It remains unreviewed and must not be used for scientific results or actual DPO fine-tuning before independent review.
+This is a **new batch of author-drafted questions**, not observed human preferences. It adds 32 families (64 comparisons) to the original 18-family seed, including 12 additional v0.3 families. It remains unreviewed, but can now be used for an **explicitly synthetic research-only DPO pilot** without human ratings. It must never be represented as independently confirmed human preference data.
 
 ## Design
 
@@ -14,14 +14,14 @@ This is a **new batch of author-drafted questions**, not observed human preferen
 
 | Split | New families | New comparison rows |
 | --- | ---: | ---: |
-| Train | 14 | 28 |
-| Development | 3 | 6 |
-| Public illustrative test | 3 | 6 |
-| **Total** | **20** | **40** |
+| Train | 22 | 44 |
+| Development | 5 | 10 |
+| Public illustrative test | 5 | 10 |
+| **Total** | **32** | **64** |
 
-The expanded public research collection, including the earlier seed, has **38 families and 76 comparison records** (52 train, 12 development, 12 illustrative test).
+The expanded public research collection, including the earlier seed, has **50 families and 100 comparison records** (68 train, 16 development, 16 illustrative test).
 
-The public test rows are examples of *evaluation design*, not a hidden benchmark. Any future claims of model generalization will require a separate independently authored, withheld, human-reviewed evaluation set.
+The public test rows are examples of *evaluation design*, not a hidden benchmark. A positive held-out synthetic result supports only *within-synthetic-distribution* generalization. External validation would require a separately authored distribution or observations; human review is not a prerequisite for this first mechanical demonstration.
 
 ## Reproducibility
 
@@ -31,7 +31,7 @@ python3 tools/validate.py data/*.jsonl
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-### Blind review of new training candidates
+### Optional blind review of new training candidates
 
 Use the existing tool instead of duplicating the labeling process:
 
@@ -45,6 +45,10 @@ python3 tools/review.py prepare \
 The resulting blinded tasks match the `web/relational/challenge_tasks.jsonl` public handout. Open the site's **Blind review** page, import the tasks, and export ratings from two independent human reviewers. Use `review.py compile` on their rating files. See [`REVIEW.md`](REVIEW.md).
 
 **Important:** There is no machine-generated 'ground truth' about the right emotional response. Reviewers can overturn either author-designated preference, choose *tie*, or reject both. Incomplete families are excluded.
+
+## Synthetic research path
+
+Use the existing `tools/export_dpo.py --mode synthetic` to produce training data from the **train split only**; see [SYNTHETIC_PROTOCOL.md](SYNTHETIC_PROTOCOL.md). The independent-review interface is preserved as an optional follow-up. No reviewer identity is ever fabricated.
 
 ## What this batch cannot establish
 

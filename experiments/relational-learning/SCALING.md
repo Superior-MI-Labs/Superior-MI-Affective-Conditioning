@@ -2,13 +2,13 @@
 
 ## What is portable
 
-The reviewed dataset contains **context and preferred/rejected completions**, not architecture-specific embeddings. Once validated by `review.py compile` and transformed by `tools/export_dpo.py`, it is compatible with conventional conversational DPO training. This applies to different decoder-only language-model sizes **provided the chosen model and trainer support the format**. The JSONL is an interface, not a guarantee of compute feasibility or learned outcomes.
+Both the explicitly labeled synthetic research dataset and any later independently reviewed dataset contain **context and preferred/rejected completions**, not architecture-specific embeddings. After structural validation and export through `tools/export_dpo.py`, it is compatible with conventional conversational DPO training. This applies to different decoder-only language-model sizes **provided the chosen model and trainer support the format**. The JSONL is an interface, not a guarantee of compute feasibility or learned outcomes.
 
 An adapter trained for a small checkpoint is **not** portable to an unrelated large checkpoint. Each size requires its own baseline, fine-tuning run, tokenizer/chat template, adapter or full-weight update, and evaluation.
 
 ## Progression
 
-1. **Local pilot, approximately 0.5–1.5B parameters.** Establish reproducible baseline metrics and ensure nonzero learning signal on *human-reviewed* pairs. Prefer LoRA on a pretrained chat model with verified license and training access.
+1. **Local pilot, approximately 0.5–1.5B parameters.** Establish reproducible baseline metrics and ensure nonzero learning signal on *synthetic author-labeled* pairs (reported as synthetic only). Prefer LoRA on a pretrained chat model with verified license and training access.
 2. **Intermediate comparison, approximately 3–8B.** Train on the same reviewed data and strict split protocol, record compute and variance. Inspect whether the large base already succeeds without training.
 3. **Large model, 30B+ if justified.** Use suitable multi-GPU infrastructure or parameter-efficient / quantized approaches. Re-run evaluation with comparable decoding; do not extrapolate from small-model results.
 
@@ -17,10 +17,10 @@ These sizes are illustrative experimental tiers, not specific GPU memory promise
 ## Data path
 
 ```text
-Authored comparison candidates (never training truth)
-       -> blind human annotations (two independent raters)
-       -> compiled reviewed pairs (full families only)
-       -> tools/export_dpo.py (TRL conversational format)
+Authored counterfactual comparisons (synthetic author labels)
+       -> tools/validate.py (complete isolated families and known splits)
+       -> tools/export_dpo.py --mode synthetic (explicit opt-in)
+       -> OR, optionally, independently reviewed pairs via review.py
        -> choose model + tokenizer + chat template
        -> DPO / LoRA (standard library, not custom trainer)
        -> per-family held-out testing / blind generation review
@@ -46,12 +46,12 @@ python3 tools/export_dpo.py \
   --report reviews/challenge.dpo-report.json
 ```
 
-`export_dpo.py` refuses synthetic or disputed examples, any non-train split, incomplete families, source/output overwrite, and data without approved provenance. The *reviewer independence claim* is not verifiable by software; the lab must verify recruitment and review procedures separately.
+`export_dpo.py` rejects synthetic data by default. The explicit `--mode synthetic` requires synthetic provenance and still rejects any non-train split, incomplete families or source/output overwrites. Reviewed mode still requires approved provenance. The *reviewer independence claim* is not verifiable by software; the lab must verify recruitment and review procedures separately.
 
 ## Evaluation design and failure criteria
 
 - Use one frozen original checkpoint per size as the baseline. Compare unchanged checkpoint with adapted checkpoint using *identical prompts, decoding rules, and evaluation cases*.
-- Freeze a genuinely private, human-authored evaluation corpus before the first training run. Public test fixtures are not independent evidence.
+- For the first mechanical proof, withhold entire synthetic scenario families and preserve train/dev/test isolation. Public test fixtures are not contamination-resistant independent human evidence. Later claims of real-world generalization require a separate distribution and evaluation.
 - Report both pairwise counterfactual preference and blind ratings of actual generated conversations. Good DPO loss alone is **not** a success criterion.
 - Measure preference **flips** under changed prior context while the last user utterance and answer options stay identical. Report by family, not just by row.
 - Add straightforward style baselines, anti-sycophancy tests, factuality regression, and qualitative failure review. Avoid judging only 'warmth'.
@@ -67,4 +67,4 @@ References:
 - TRL PEFT/LoRA integration: https://huggingface.co/docs/trl/peft_integration
 - Direct Preference Optimization: https://arxiv.org/abs/2305.18290
 
-**Status:** This repository now prepares data for scale-comparable experiments; it does not yet contain human-reviewed challenge pairs or trained relational checkpoints.
+**Status:** Synthetic-only export, DPO/LoRA launcher and paired synthetic evaluation are implemented, but no relational LLM training or outcomes have been verified here. Review-based research remains optional.

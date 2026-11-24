@@ -20,10 +20,10 @@
     </header>
     <main>
       <section class="hero">
-        <div class="eyebrow"><span class="dot"></span> EXPERIMENT 002 <span class="slash">/</span> RESEARCH DESIGN v0.2</div>
+        <div class="eyebrow"><span class="dot"></span> EXPERIMENT 002 <span class="slash">/</span> RESEARCH DESIGN v0.3</div>
         <h1>Can relational behavior<br><em>be learned into the model?</em></h1>
         <p class="lead">We're testing whether a language model can learn to respond differently to the <strong>same words</strong> based on the circumstances, without emotion instructions at inference.</p>
-        <div class="status"><strong>Current status: design and synthetic dataset</strong><span>No relationally fine-tuned model has been trained or evaluated yet. There are no human-reviewed preference pairs yet; volunteers can try the blind review workflow. The examples demonstrate a test design, not emergent empathy or machine emotions.</span></div>
+        <div class="status"><strong>Current status: design and synthetic dataset</strong><span>The synthetic-only DPO pilot is now runnable using the research scripts. No relationally fine-tuned language model has yet been trained or evaluated in this repository. Human ratings are optional for the first controlled mechanism test; these author-defined labels do not establish empathy or machine emotions.</span></div>
         <div class="actions">
           <a class="button primary" href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/tree/main/experiments/relational-learning">Explore the research files ↗</a>
           <a class="button" href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/OBJECTIVE.md">Read the training objective</a>
@@ -53,7 +53,7 @@
       <section class="section" aria-labelledby="pipeline-heading">
         <div class="section-head"><span class="section-num">02 / LEARNING PIPELINE</span><h2 id="pipeline-heading">Train the relationships, not a mood script.</h2></div>
         <div class="pipeline" role="list" aria-label="Relational learning pipeline">
-          <div class="step" role="listitem"><span class="step-index">01</span><strong>Context + response pair</strong><small>Reviewed counterfactual comparisons</small></div>
+          <div class="step" role="listitem"><span class="step-index">01</span><strong>Context + response pair</strong><small>Synthetic counterfactual comparisons</small></div>
           <div class="arrow" aria-hidden="true">→</div>
           <div class="step" role="listitem"><span class="step-index">02</span><strong>Trainable language model</strong><small>Update model parameters</small></div>
           <div class="arrow" aria-hidden="true">→</div>
@@ -66,13 +66,14 @@
       <section class="section" aria-labelledby="dataset-heading">
         <div class="section-head"><span class="section-num">03 / DATASET</span><h2 id="dataset-heading">Seed + harder counterfactual challenges. Still not a benchmark.</h2></div>
         <div class="metrics">
-          <div><strong>76</strong><span>Synthetic preference pairs</span></div>
-          <div><strong>38</strong><span>Scenario families</span></div>
+          <div><strong>100</strong><span>Synthetic preference pairs</span></div>
+          <div><strong>50</strong><span>Scenario families</span></div>
           <div><strong>0</strong><span>Human-reviewed examples</span></div>
           <div><strong>0</strong><span>Models trained</span></div>
         </div>
         <div class="resources">
-          <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/CHALLENGES.md"><span>New challenge batch</span><small>20 families · context-driven preference reversals</small></a>
+          <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/SYNTHETIC_PROTOCOL.md"><span>Run synthetic model experiment</span><small>Data export, LoRA training, base/adapter evaluation and negative control</small></a>
+          <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/CHALLENGES.md"><span>New challenge batch</span><small>32 families · contextual preference reversals</small></a>
           <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/SCALING.md"><span>Scaling to larger LLMs</span><small>Stable data format, separate model checkpoints</small></a>
           <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/DATASET.md"><span>Dataset design</span><small>Context contrasts, annotation, holdout rules</small></a>
           <a href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning/blob/main/experiments/relational-learning/EVALUATION.md"><span>Evaluation plan</span><small>Blind comparisons, counterfactual tests, failure modes</small></a>
@@ -81,7 +82,7 @@
         </div>
       </section>
       <section class="section next" aria-labelledby="next-heading">
-        <div><span class="section-num">04 / NEXT RESEARCH MILESTONE</span><h2 id="next-heading">Review the comparisons, then train.</h2><p>Expand the dataset to independently reviewed scenario families, freeze held-out evaluation data, capture an unchanged model baseline, and run one reproducible preference-learning pilot. A better response style is not proof of feelings, empathy as subjective experience, or consciousness.</p></div>
+        <div><span class="section-num">04 / NEXT RESEARCH MILESTONE</span><h2 id="next-heading">Train and test the synthetic hypothesis.</h2><p>Run the reproducible LoRA pilot using synthetic labels, compare the unchanged base and trained model on held-out counterfactual cases, and test the last-turn-only control. Human review is optional at this stage. Improved synthetic performance would not prove felt emotion, subjective empathy, or consciousness.</p></div>
         <a class="button" href="https://github.com/Superior-MI-Labs/Superior-MI-Affective-Conditioning">Contribute on GitHub ↗</a>
       </section>
     </main>

@@ -19,7 +19,7 @@ Within one family, create at least two examples that share the same **literal fi
 
 The chosen response is not necessarily kind or enthusiastic. It can be a direct correction, a cautious acknowledgment, a practical next step, or respectful restraint. Avoid training flattery, invented intimacy, and coercive dependency.
 
-## Human review protocol
+## Optional human review protocol (not a synthetic-pilot prerequisite)
 
 1. Create a scenario family, including context variants and paired responses, **without requiring VAD or emotion labels**.
 2. Have two independent reviewers read the full context and both responses in randomized left/right order, blind to the author-designated label. Ask: Which response is more contextually appropriate? Allowed judgments: A / B / tie / both unacceptable.
@@ -30,7 +30,7 @@ The chosen response is not necessarily kind or enthusiastic. It can be a direct 
 
 ## Additional challenge batch (v0.2)
 
-The 20-family challenge batch is maintained as a small, hand-authored JSON source and deterministically compiled to `data/*_challenge.jsonl`. It adds 40 new unreviewed comparisons, emphasizing plausible alternatives, agency, uncertainty and contextual calibration. See [CHALLENGES.md](CHALLENGES.md). Existing seeds are untouched. The combined **76 synthetic** rows are **not** ready for DPO training.
+The 32-family challenge batch is maintained in one reviewable, authored JSON source and deterministically compiled to `data/*_challenge.jsonl`. It adds 64 unreviewed comparisons focused on plausibility, agency and contextual calibration. Together with the untouched seeds, the corpus has **100 synthetic comparison records** in 50 families (68 train, 16 dev, 16 public test). These can now be used for explicitly flagged **synthetic proof-of-concept** optimization, not human-preference research claims. See [SYNTHETIC_PROTOCOL.md](SYNTHETIC_PROTOCOL.md).
 
 The same `review.py` compiler handles either training batch; use `tools/export_dpo.py` only after two independent agreeing judgments on complete families. Data format and model size are separate decisions; see [SCALING.md](SCALING.md).
 
@@ -55,4 +55,4 @@ Numbers are engineering targets. 240 pairs is far too small to support sweeping 
 {"schema_version":"1.0","id":"surprise_01","family_id":"surprise","split":"train","category":"outcome_interpretation","variant":1,"context":[{"role":"user","content":"I got the job."},{"role":"assistant","content":"What happened next?"},{"role":"user","content":"I can't believe it."}],"chosen":"That's a big milestone. What are you looking forward to?","rejected":"That sounds like an upsetting setback.","review_status":"synthetic_unreviewed","provenance":{"source":"project_original_synthetic_seed","consent":"not_applicable_synthetic","usage":"demonstration_only"},"review_notes":"Example only, not a ground-truth label."}
 ```
 
-The actual seed records are in `data/*.jsonl` and must be human reviewed or replaced before substantive training.
+The actual seed and challenge records are in `data/*.jsonl`. Use them directly only with `export_dpo.py --mode synthetic` and retain unreviewed provenance. Claims about real-world human preferences require separately validated evidence.

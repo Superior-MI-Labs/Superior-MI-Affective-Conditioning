@@ -16,13 +16,13 @@ from validate import validate
 
 class ChallengeDatasetTests(unittest.TestCase):
     def test_generator_exactly_matches_files(self):
-        self.assertEqual({'train':28,'dev':6,'test':6}, write_files(ROOT / 'data', check=True))
+        self.assertEqual({'train':44,'dev':10,'test':10}, write_files(ROOT / 'data', check=True))
 
     def test_challenges_are_counterfactual_and_isolated(self):
         paths=[str(p) for p in sorted((ROOT/'data').glob('*.jsonl'))]
         self.assertEqual([],validate(paths))
         families=generate()
-        self.assertEqual(20,len({r['family_id'] for rows in families.values() for r in rows}))
+        self.assertEqual(32,len({r['family_id'] for rows in families.values() for r in rows}))
         self.assertTrue(all(r['review_status']=='synthetic_unreviewed' for rows in families.values() for r in rows))
 
     def test_public_review_page_has_distinct_task_packs(self):

@@ -8,7 +8,7 @@ Our current hypothesis is that a language model can learn **context-sensitive re
 
 The starting design uses *counterfactual response preference pairs*: the same final message appears under different preceding circumstances, with the preferred response reversed. We propose evaluating a fine-tuned language model against the unchanged base checkpoint using novel situation families, factuality tests and blind human assessments.
 
-**Research status:** Experiment design and 76 synthetic, **unreviewed** comparisons across 38 scenario families, including 40 new context-sensitive challenge records. **No relational language model has yet been trained or evaluated.** The seed files are smoke-test fixtures, not validated preference judgments. Improved social responses, if observed later, would not establish felt emotions, subjective empathy or consciousness.
+**Research status:** Experiment design and 100 synthetic, **unreviewed** comparisons across 50 scenario families, including 24 new context-sensitive records. A synthetic-only DPO/LoRA training and base-versus-adapter evaluation path is now runnable without human annotation. **No relational language model has yet been trained or evaluated.** The seed files are smoke-test fixtures, not validated preference judgments. Improved social responses, if observed later, would not establish felt emotions, subjective empathy or consciousness.
 
 ### Reproduce the data checks
 
@@ -18,9 +18,9 @@ python3 experiments/relational-learning/tools/validate.py experiments/relational
 python3 -m unittest discover -s experiments/relational-learning/tests -p 'test_*.py' -v
 ```
 
-Read the [scaling plan](experiments/relational-learning/SCALING.md), [new challenge batch](experiments/relational-learning/CHALLENGES.md), [research hypothesis and DPO objective](experiments/relational-learning/OBJECTIVE.md), [dataset protocol](experiments/relational-learning/DATASET.md), [evaluation plan](experiments/relational-learning/EVALUATION.md), and [two-rater review guide](experiments/relational-learning/REVIEW.md). The browser review tool runs locally and does not upload ratings. A compiler requires two independent agreeing judgments per variant, rejects disputes and incomplete families, and forbids exporting the test split for training. No examples have been human reviewed yet.
+Read the [synthetic-only experiment protocol](experiments/relational-learning/SYNTHETIC_PROTOCOL.md), [scaling plan](experiments/relational-learning/SCALING.md), [new challenge batch](experiments/relational-learning/CHALLENGES.md), [research hypothesis and DPO objective](experiments/relational-learning/OBJECTIVE.md), [dataset protocol](experiments/relational-learning/DATASET.md), [evaluation plan](experiments/relational-learning/EVALUATION.md), and [two-rater review guide](experiments/relational-learning/REVIEW.md). The browser review tool runs locally and does not upload ratings. A compiler requires two independent agreeing judgments per variant, rejects disputes and incomplete families, and forbids exporting the test split for training. No examples have been human reviewed yet.
 
-The next milestone is **independent human review of the preference pairs**, then converting only approved records to standard conversational DPO data using `tools/export_dpo.py`, selecting a small base checkpoint and running a controlled pilot. The same reviewed data format can support larger LLMs, but an improvement at small scale does not guarantee an improvement at large scale. We deliberately are not building a separate mood-state system or custom AI framework for this experiment.
+The next milestone is to execute the synthetic-only model pilot, compare the frozen base and adapted checkpoint on held-out scenario families, and test the last-message-only control. Human review remains an optional external-validation pathway, not a prerequisite for this mechanical experiment. Improvements at small scale do not guarantee that they carry to larger LLMs. We deliberately are not building a separate mood-state system or custom AI framework for this experiment.
 
 ---
 

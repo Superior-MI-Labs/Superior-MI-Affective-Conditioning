@@ -1,4 +1,6 @@
-# Experiment 002 — Blinded relational preference review
+# Experiment 002 — Optional blinded relational preference review
+
+**v0.3:** This is an optional route to externally reviewed evidence. The synthetic-only proof-of-concept has a separate, explicit track in [SYNTHETIC_PROTOCOL.md](SYNTHETIC_PROTOCOL.md) and does not require reviewers.
 
 **Purpose:** Turn *unreviewed synthetic candidate comparisons* into a small, independently annotated research set without allowing the original author labels to become ground truth by default. This process does not train a model or prove any affective capability.
 
@@ -55,6 +57,6 @@ The compiler refuses to overwrite existing source, task, rating, or output files
 
 ## v0.2 separate challenge batch
 
-The additional 28 train-split challenge tasks are available at `web/relational/challenge_tasks.jsonl`, also downloadable from the review page. Review them as a **distinct batch** from the original 24 seed tasks so original task IDs/hashes remain stable. Use identical `review.py prepare` / `review.py compile` commands with `--data data/train_challenge.jsonl` and distinct private output filenames. Never merge ratings or pass evaluation examples into the training compiler.
+The additional 44 train-split challenge tasks are available at `web/relational/challenge_tasks.jsonl`, also downloadable from the review page. Review them as a **distinct batch** from the original 24 seed tasks so original task IDs/hashes remain stable. Use identical `review.py prepare` / `review.py compile` commands with `--data data/train_challenge.jsonl` and distinct private output filenames. Never merge ratings or pass evaluation examples into the training compiler.
 
 After compilation, run `tools/export_dpo.py` on the reviewed train split to produce the conventional `prompt` / `chosen` / `rejected` format supported by TRL. This exporter does not train, and it is intentionally impossible to export the author-drafted synthetic inputs directly.

@@ -1,5 +1,7 @@
 # Evaluation plan — falsification first
 
+**v0.3 synthetic branch:** Use the controlled, automated base-versus-adapter and full-context-versus-last-turn comparison described in [SYNTHETIC_PROTOCOL.md](SYNTHETIC_PROTOCOL.md). Ratings and human review remain optional for later external-validity studies, not a prerequisite for synthetic mechanism testing.
+
 ## What we actually train
 
 One finetuned language model using DPO on reviewed, context-dependent preference pairs. The frozen original checkpoint acts only as an evaluation baseline and training reference; no second system, VAD head, or mood module is trained.
